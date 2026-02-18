@@ -1,0 +1,53 @@
+﻿"""
+    """Ä°nteraktif grafik sÄ±nÄ±fÄ±"""
+        """Ä°nteraktif figure oluÅŸturur"""
+        """Canvas oluÅŸturur"""
+        """Toolbar ve hÄ±zlÄ± butonlar iÃ§in alt Ã§erÃ§eveyi oluÅŸturur."""
+        """GrafiÄŸin altÄ±nda hÄ±zlÄ± eriÅŸim butonlarÄ±nÄ± oluÅŸturur."""
+        ttk.Button(bar, text="â†” Pan", width=14, command=self._toggle_pan).pack(side="left", padx=2)
+        ttk.Button(bar, text="â¬š Zoom", width=14, command=self._toggle_zoom_box).pack(side="left", padx=2)
+        ttk.Button(bar, text="âŸ³ Reset", width=14, command=self._reset_view).pack(side="left", padx=2)
+        ttk.Button(bar, text="ğŸ“‹ PNG Kopyala", width=16, command=self._copy_png_to_clipboard).pack(side="left", padx=6)
+        ttk.Button(bar, text="â¬‡ CSV DÄ±ÅŸa Aktar", width=16, command=self._export_csv).pack(side="left", padx=2)
+        """Ã–zel toolbar oluÅŸturur"""
+        """Event handlers baÄŸlar"""
+        """Pan modunu aÃ§ar/kapatÄ±r"""
+                self.pan_button.configure(text="ğŸ“ Pan ON", style="Accent.TButton")
+                self.pan_button.configure(text="ğŸ“ Pan", style="TButton")
+        """Zoom box modunu aÃ§ar/kapatÄ±r"""
+                self.zoom_button.configure(text="ğŸ” Zoom ON", style="Accent.TButton")
+                self.zoom_button.configure(text="ğŸ” Zoom Box", style="TButton")
+        """Rectangle selector oluÅŸturur"""
+        """Peak detection aÃ§ar/kapatÄ±r"""
+                self.peak_button.configure(text="ğŸ“ˆ Peaks ON", style="Accent.TButton")
+                self.peak_button.configure(text="ğŸ“ˆ Peaks", style="TButton")
+        """Peak noktalarını tespit eder ve gösterir - Deprem verilerine uygun"""
+                logger.debug("Peak detection hatası: %s", e)
+        """Peak iÅŸaretlerini temizler"""
+        """Grafik gÃ¶rÃ¼nÃ¼mÃ¼nÃ¼ resetler"""
+        """FigÃ¼rÃ¼ panoya kopyalar ya da PNG olarak kaydeder."""
+                filetypes=[("PNG dosyasÄ±", "*.png")],
+        """Zaman serisi verilerini CSV'ye aktarÄ±r."""
+                messagebox.showinfo("Bilgi", "DÄ±ÅŸa aktarÄ±lacak veri yok.")
+                messagebox.showinfo("Bilgi", "Veri bulunamadÄ±.")
+                filetypes=[("CSV dosyasÄ±", "*.csv")],
+                title="CSV DÄ±ÅŸa Aktar"
+                writer.writerow([f"Zaman (s)", f"Ä°vme ({acc_unit})", f"HÄ±z ({vel_unit})", f"YerdeÄŸiÅŸtirme ({disp_unit})"])
+                messagebox.showerror("Hata", f"CSV dÄ±ÅŸa aktarÄ±m hatasÄ±: {e}")
+        """Mouse bÄ±rakma eventi"""
+        """Pan iÅŸlemini yapar"""
+        """Hover tooltip gÃ¶sterir"""
+            logger.debug("Tooltip hatası: %s", e)
+        """Verilen eksene baÄŸlÄ±, stilize bir annotation oluÅŸturur ve dÃ¶ndÃ¼rÃ¼r."""
+        """TÃ¼m tooltipleri gizler"""
+        """YardÄ±m mesajÄ± gÃ¶sterir"""
+        msgbox.showinfo("Ä°nteraktif Grafik YardÄ±mÄ±", help_text)
+        """Time series verilerini Ã§izer"""
+        """Animasyon iÃ§in mevcut zaman iÅŸaretÃ§isini gÃ¶sterir"""
+            logger.debug("Animasyon marker hatası: %s", e)
+        """Animasyon zaman iÅŸaretÃ§isini gizler"""
+            logger.debug("Animasyon marker gizleme hatası: %s", e)
+        """Mevcut deÄŸerleri highlight eder"""
+            logger.debug("Değer highlight hatası: %s", e)
+        """TÃ¼m animasyon highlight'larÄ±nÄ± temizler"""
+            logger.debug("Animasyon temizleme hatası: %s", e)

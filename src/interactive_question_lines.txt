@@ -1,0 +1,100 @@
+1:?"""
+2:İnteraktif grafik bile�?eni - Pan, Zoom, Hover, Peak Detection
+38:        self.hover_annotations = []  # Her eksen için bir annotation tutulur (eksene ba�?lı)
+60:        self.min_peak_height = None # Minimum peak yüksekli�?i
+62:        # Animasyon deste�?i
+63:        self.animation_markers = []  # Animasyon için zaman i�?aretçileri
+67:        """İnteraktif figure olu�?turur"""
+68:        # Figure olu�?tur
+72:        # Subplotları olu�?tur
+80:        # Her eksen için birer hover annotation olu�?tur (eksene sabit)
+86:        # Canvas olu�?tur
+89:        # Hızlı eri�?im barı (grafiklerin altında)
+92:        # Event handlers ba�?la
+95:        # Toolbar olu�?tur
+101:        """Canvas olu�?turur"""
+130:        # Layout düzeltmesini biraz geciktir (widget'lar tam yerle�?tikten sonra)
+132:            # Tkinter root'a eri�?im için root_frame'den yukarı çık
+143:        """Toolbar ve hızlı butonlar için alt çerçeveyi olu�?turur."""
+154:        """Grafi�?in altında hızlı eri�?im butonlarını olu�?turur."""
+167:        ttk.Button(bar, text="�? Pan", width=14, command=self._toggle_pan).pack(side="left", padx=2)
+168:        ttk.Button(bar, text="�? Zoom", width=14, command=self._toggle_zoom_box).pack(side="left", padx=2)
+169:        ttk.Button(bar, text="�?� Reset", width=14, command=self._reset_view).pack(side="left", padx=2)
+170:        ttk.Button(bar, text="?? PNG Kopyala", width=16, command=self._copy_png_to_clipboard).pack(side="left", padx=6)
+171:        ttk.Button(bar, text="�? CSV Dı�?a Aktar", width=16, command=self._export_csv).pack(side="left", padx=2)
+174:        """�?zel toolbar olu�?turur"""
+202:        """Event handlers ba�?lar"""
+218:                self.pan_button.configure(text="??� Pan ON", style="Accent.TButton")
+225:                self.pan_button.configure(text="??� Pan", style="TButton")
+234:                self.zoom_button.configure(text="??� Zoom ON", style="Accent.TButton")
+238:            # Rectangle selector olu�?tur
+242:                self.zoom_button.configure(text="??� Zoom Box", style="TButton")
+248:        """Rectangle selector olu�?turur"""
+255:                button=[1],  # Sol mouse tu�?u
+293:                self.peak_button.configure(text="?? Peaks ON", style="Accent.TButton")
+297:                self.peak_button.configure(text="?? Peaks", style="TButton")
+301:        """Peak noktalar?n? tespit eder ve g�sterir - Deprem verilerine uygun"""
+320:                    # ?vme i�in daha hassas peak detection
+324:                elif 'h?z' in data_type:
+325:                    # H?z i�in orta seviye
+329:                else:  # yerde?i?tirme
+330:                    # Yerde?i?tirme i�in daha az hassas
+335:                # En b�y�k ve en k���k de?erleri bul
+347:                # En b�y�k de?eri i?aretle (k?rm?z? daire)
+352:                                        label=f'En b�y�k de?er: {max_value:.4f}')
+355:                # En k���k de?eri i?aretle (mavi daire)
+360:                                        label=f'En k���k de?er: {min_value:.4f}')
+369:                logger.debug("Peak detection hatas?: %s", e)
+377:        """Peak i�?aretlerini temizler"""
+387:                    # Kaldırılamıyorsa görünürlü�?ünü kapat
+391:                # Her ihtimale kar�?ı görünürlü�?ünü kapat
+456:                messagebox.showinfo("Bilgi", "Dı�?a aktarılacak veri yok.")
+473:                title="CSV Dı�?a Aktar"
+481:                writer.writerow([f"Zaman (s)", f"İvme ({acc_unit})", f"Hız ({vel_unit})", f"Yerde�?i�?tirme ({disp_unit})"])
+486:                messagebox.showerror("Hata", f"CSV dı�?a aktarım hatası: {e}")
+496:        # Pan i�?lemi
+505:        if event.button == 1:  # Sol tu�?
+511:        if event.button == 1:  # Sol tu�?
+556:        """Pan i�?lemini yapar"""
+621:            # Tooltip metnini olu�?tur
+625:            tooltip_text = f'{title}\nZaman: {closest_x:.4f} s\nDe�?er: {closest_y:.6g} {unit}'
+631:                # Eksene özel annotation olu�?tur/yenile
+633:                # Liste boyutunu eksen sayısına e�?itle
+645:            # Di�?er annotations'ları gizle
+653:            logger.debug("Tooltip hatas?: %s", e)
+656:        """Verilen eksene ba�?lı, stilize bir annotation olu�?turur ve döndürür."""
+674:            # Hata halinde bo�? bir placeholder döndür
+695:??�️ Mouse:
+696:�?� Scroll: Zoom in/out
+697:�?� Sürükle (Pan mode): Grafik kaydır
+698:�?� Sol tık + sürükle (Zoom mode): Alan seç
+700:�?�️ Klavye:
+701:�?� R: Görünümü resetle
+702:�?� P: Peak detection aç/kapat
+703:�?� H: Bu yardımı göster
+705:??� Butonlar:
+706:�?� Pan: Grafik sürükleme modu
+707:�?� Zoom Box: Alan seçerek zoom
+708:�?� Peaks: Peak noktalarını göster
+709:�?� Reset: Orijinal görünüme dön
+736:                'title': 'Yerde�?i�?tirme',
+753:        # İvme grafi�?i - profesyonel renk
+757:            self.axes[0].set_title('İvme Zaman Grafi�?i', fontsize=11, fontweight='bold', color=CUSTOM_COLORS['text'], loc='center')
+760:        # Hız grafi�?i - profesyonel renk
+764:            self.axes[1].set_title('Hız Zaman Grafi�?i', fontsize=11, fontweight='bold', color=CUSTOM_COLORS['text'], loc='center')
+767:        # Yerde�?i�?tirme grafi�?i - profesyonel renk
+770:            self.axes[2].set_ylabel(f'Yerde�?i�?tirme ({displacement_unit})', fontsize=10, color=CUSTOM_COLORS['text'])
+772:            self.axes[2].set_title('Yerde�?i�?tirme Zaman Grafi�?i', fontsize=11, fontweight='bold', color=CUSTOM_COLORS['text'], loc='center')
+788:        """Animasyon için mevcut zaman i�?aretçisini gösterir"""
+790:            # �?nceki zaman çizgisini temizle
+808:            logger.debug("Animasyon marker hatas?: %s", e)
+811:        """Animasyon zaman i�?aretçisini gizler"""
+818:            logger.debug("Animasyon marker gizleme hatas?: %s", e)
+821:        """Mevcut de�?erleri highlight eder"""
+828:            # Her axis için mevcut de�?eri i�?aretle
+833:                # Veri tipine göre de�?eri al
+841:                elif 'yerde�?i�?tirme' in data_key and 'Yerde�?i�?tirme' in data_values:
+842:                    value = data_values['Yerde�?i�?tirme']
+845:                    # Mevcut de�?eri profesyonel marker ile i�?aretle
+857:            logger.debug("De?er highlight hatas?: %s", e)
+873:            logger.debug("Animasyon temizleme hatas?: %s", e)
