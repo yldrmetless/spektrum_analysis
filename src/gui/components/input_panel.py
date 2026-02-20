@@ -823,25 +823,20 @@ class InputPanel:
         def _make_dropdown(parent, icon_lbl, wrapper, values, variable, key):
             """
             Custom select:
-            - Default ok YOK
-            - Chevron tıklanınca menu açılır
-            - Değer label olarak gösterilir
-            - Menü: beyaz, daha ferah, genişliği select ile uyumlu
+            - Değer ctk.CTkLabel olarak gösterilir (Entry ile aynı görünüm için)
             """
-            from tkinter import font as tkfont
-            import tkinter as tk
-
-            # Değer göstergesi (tam genişlik)
-            lbl = tk.Label(
+            # Değer göstergesi (ctk.CTkLabel kullanarak Enlem/Boylam ile stili eşitledik)
+            lbl = ctk.CTkLabel(
                 parent,
                 textvariable=variable,
-                bg=INPUT_BG,
-                fg="#111827",
-                anchor="w"
+                fg_color="transparent",
+                text_color="#111827",
+                anchor="w",
+                height=24
             )
             lbl.pack(fill="x")
 
-            # --- Menü fontu (satır yüksekliği artsın) ---
+            # --- Menü fontu ---
             try:
                 base_font = tkfont.nametofont("TkDefaultFont")
                 menu_font = base_font.copy()
@@ -869,7 +864,6 @@ class InputPanel:
             except Exception:
                 wrapper_px = 0
 
-            # karakter genişliği hesabı
             try:
                 f = menu_font or tkfont.nametofont("TkDefaultFont")
                 char_px = max(f.measure("0"), 7)
@@ -877,10 +871,9 @@ class InputPanel:
                 char_px = 8
 
             min_chars = int(wrapper_px / char_px) if wrapper_px else 0
-
             labels = [str(v) for v in values]
             max_label_len = max((len(s) for s in labels), default=0)
-            target_len = max(max_label_len + 4, min_chars)  # +4 boşluk payı
+            target_len = max(max_label_len + 4, min_chars)
 
             def _pad_label(s: str) -> str:
                 pad = max(0, target_len - len(s))
@@ -934,16 +927,42 @@ class InputPanel:
             host, icon_lbl, wrapper = _wrap_input(box, is_combo=(widget_kind == "select"))
 
             if widget_kind == "entry":
-                # CTkEntry: iç border yok
                 e = ctk.CTkEntry(
                     host,
                     textvariable=variable,
                     fg_color=INPUT_BG,
-                    border_width=0,      # iç border yok
-                    corner_radius=0,     # radius wrapper’da
+                    border_width=0,
+                    corner_radius=0,
                     height=24
                 )
                 e.pack(fill="x")
+                
+                # Kopyalama düzeltmesi: Ctrl+C sadece bu entry'nin değerini kopyalasın
+                def _copy_entry_value(event, var=variable):
+                    try:
+                        widget = event.widget
+                        if widget.selection_present():
+                            text = widget.selection_get()
+                        else:
+                            text = var.get()
+                        widget.clipboard_clear()
+                        widget.clipboard_append(text)
+                    except Exception:
+                        try:
+                            widget.clipboard_clear()
+                            widget.clipboard_append(var.get())
+                        except Exception:
+                            pass
+                    return "break"  # Varsayılan davranışı engelle
+                
+                # CTkEntry içindeki asıl tk.Entry widget'ına bağla
+                try:
+                    inner_entry = e._entry if hasattr(e, '_entry') else e
+                    inner_entry.bind('<Control-c>', _copy_entry_value)
+                    inner_entry.bind('<Control-C>', _copy_entry_value)
+                except Exception:
+                    pass
+                
                 return e
 
             if widget_kind == "select":
@@ -960,21 +979,21 @@ class InputPanel:
             raise ValueError("widget_kind must be 'entry' or 'select'")
 
         # Sol üst: Enlem
-        enlem_entry = field(
+        self.enlem_entry = field(
             grid, 0, 0, "Enlem (°)",
             widget_kind="entry",
             variable=self.enlem_var
         )
 
         # Sağ üst: Boylam
-        boylam_entry = field(
+        self.boylam_entry = field(
             grid, 1, 0, "Boylam (°)",
             widget_kind="entry",
             variable=self.boylam_var
         )
 
         # Sol alt: Deprem Düzeyi (select)
-        dd_select = field(
+        self.dd_select = field(
             grid, 0, 1, "Deprem Yer Hareketi Düzeyi",
             widget_kind="select",
             values=list(EARTHQUAKE_LEVELS),
@@ -983,15 +1002,13 @@ class InputPanel:
         )
 
         # Sağ alt: Zemin Sınıfı (select)
-        zemin_select = field(
+        self.zemin_select = field(
             grid, 1, 1, "Zemin Sınıfı",
             widget_kind="select",
             values=list(SOIL_CLASSES),
             variable=self.zemin_var,
             key="soil_class"
         )
-
-
     
     def _create_calculation_button(self):
         """Spektrumları Hesapla butonu (CTk'siz, sadece tasarım)"""
@@ -1222,10 +1239,9 @@ class InputPanel:
         _row(panel_in, "Fs",   self.fs_var,  "Kısa periyot zemin katsayısı")
         _row(panel_in, "F₁",   self.f1_var,  "1.0 sn periyot zemin katsayısı")
 
-        _row(panel_in, "S_DS", self.sds_var, "Kısa periyot tasarım spektral katsayısı")
-        _row(panel_in, "S_D1", self.sd1_var, "1.0 sn periyot tasarım spektral katsayısı")
-
-        _row(panel_in, "T_L",  self.tl_var,  "Uzun periyot geçiş periyodu", add_sep=False)
+        _row(panel_in, "Sᴅₛ",  self.sds_var, "Kısa periyot tasarım spektral katsayısı")
+        _row(panel_in, "Sᴅ₁",  self.sd1_var, "1.0 sn periyot tasarım spektral katsayısı")
+        _row(panel_in, "Tʟ",   self.tl_var,  "Uzun periyot geçiş periyodu", add_sep=False)
                 
         # --- DEĞİŞİKLİK SONU ---
     
@@ -1340,20 +1356,13 @@ class InputPanel:
         content = tk.Frame(card, bg=BG)
         content.pack(fill="x", padx=14, pady=14)
 
-        # Başlık (büyük harf + biraz büyük)
-        try:
-            base = tkfont.nametofont("TkDefaultFont")
-            title_font = base.copy()
-            title_font.configure(size=max(base.cget("size") + 2, 12), weight="bold")
-        except Exception:
-            title_font = None
-
+        # Başlık (Büyütüldü ve Poppins yapıldı)
         tk.Label(
             content,
             text="ÇİZİLECEK SPEKTRUMLAR",
             bg=BG,
             fg=LABEL_COLOR,
-            font=title_font,
+            font=("Poppins", 13, "bold"),
             anchor="w"
         ).pack(fill="x", pady=(0, 10))
 
@@ -1363,7 +1372,7 @@ class InputPanel:
         self.opt_disp = tk.BooleanVar(value=False)
         self.logT_var = tk.BooleanVar(value=False)
 
-        # Checkbox style (web'e yakın)
+        # Checkbox style (Poppins ve 13px eklendi)
         def _ck(text, var):
             cb = ctk.CTkCheckBox(
                 content,
@@ -1376,7 +1385,8 @@ class InputPanel:
                 text_color="#111827",
                 checkbox_width=22,
                 checkbox_height=22,
-                corner_radius=11  # yuvarlak
+                corner_radius=11,
+                font=("Poppins", 13)
             )
             cb.pack(fill="x", pady=6)
             return cb
@@ -1391,19 +1401,13 @@ class InputPanel:
 
         _ck("Periyot ekseni Log(T)", self.logT_var)
 
-        # Referans periyot label (küçük caps gibi)
-        try:
-            sub_font = tkfont.nametofont("TkDefaultFont").copy()
-            sub_font.configure(size=max(sub_font.cget("size"), 10), weight="bold")
-        except Exception:
-            sub_font = None
-
+        # Referans periyot label (Poppins ve 11px yapıldı)
         tk.Label(
             content,
             text="REFERANS PERİYOT ÇİZGİLERİ (T)",
             bg=BG,
             fg=LABEL_COLOR,
-            font=sub_font,
+            font=("Poppins", 11, "bold"),
             anchor="w"
         ).pack(fill="x", pady=(14, 6))
 
@@ -1421,11 +1425,12 @@ class InputPanel:
         self.ref_periods_entry = ctk.CTkEntry(
             wrapper,
             textvariable=self.ref_periods_var,
-            fg_color="#F8FAFC",
+            fg_color="#FFFFFF",
             border_width=0,
             corner_radius=0,
             height=42,
-            text_color="#111827"
+            text_color="#111827",
+            font=("Poppins", 13)  # İŞTE BURAYA EKLEDİM
         )
         self.ref_periods_entry.pack(fill="x", padx=12, pady=10)
 
@@ -1436,11 +1441,8 @@ class InputPanel:
         )
         try:
             vcmd = (self.parent_frame.register(self._validate_ref_periods), '%P')
-            # CTkEntry 'validate' desteklemez; mevcut validasyonun bozulmaması için dokunmuyoruz.
-            # İstersen validasyonu <KeyRelease> ile aynı mantıkta bağlarız.
         except Exception:
             pass
-    
     def _create_unit_selection(self):
         """Birim seçimi paneli - Input'taki (Zemin Sınıfı) ile aynı custom select"""
 
@@ -1904,37 +1906,64 @@ class InputPanel:
         return all((ch in allowed) for ch in proposed)
 
     def _attach_tooltip(self, widget, text: str):
-        """Basit tooltip: widget üzerine gelince küçük Toplevel gösterir"""
+        """Web stili: Beyaz arkaplan, gri border ve Poppins fontuyla tooltip"""
+        import tkinter as tk  # tk'nın erişilebilir olduğundan emin olun
+        
         try:
-            tip = {'win': None}
+            tooltip_data = {'win': None}
 
             def show_tip(event=None):
-                if tip['win'] is not None:
+                if tooltip_data['win'] is not None:
                     return
                 try:
+                    # Konumlandırma
                     x = widget.winfo_rootx() + 20
-                    y = widget.winfo_rooty() + 20
+                    y = widget.winfo_rooty() + widget.winfo_height() + 5
+                    
+                    # Pencere oluşturma
                     win = tk.Toplevel(widget)
                     win.wm_overrideredirect(True)
                     win.wm_geometry(f"+{x}+{y}")
-                    frame = ttk.Frame(win, padding=6)
-                    frame.pack()
-                    lbl = ttk.Label(frame, text=text, style="Small.TLabel")
-                    lbl.pack()
-                    tip['win'] = win
+                    
+                    # Dış çerçeve (Gri border burada sağlanıyor)
+                    # highlightthickness border kalınlığını, highlightbackground rengini belirler
+                    container = tk.Frame(
+                        win, 
+                        bg="#FFFFFF", 
+                        highlightbackground="#D1D5DB", 
+                        highlightthickness=1,
+                        padx=10, 
+                        pady=8
+                    )
+                    container.pack()
+
+                    # Metin (Poppins font ve beyaz bg)
+                    label = tk.Label(
+                        container,
+                        text=text,
+                        justify="left",
+                        bg="#FFFFFF",
+                        fg="#374151",
+                        font=("Poppins", 8),
+                        wraplength=400
+                    )
+                    label.pack()
+                    
+                    tooltip_data['win'] = win
                 except Exception:
                     pass
 
             def hide_tip(event=None):
                 try:
-                    if tip['win'] is not None:
-                        tip['win'].destroy()
-                        tip['win'] = None
+                    if tooltip_data['win'] is not None:
+                        tooltip_data['win'].destroy()
+                        tooltip_data['win'] = None
                 except Exception:
-                    tip['win'] = None
+                    tooltip_data['win'] = None
 
             widget.bind("<Enter>", show_tip)
             widget.bind("<Leave>", hide_tip)
+            
         except Exception:
             pass
     

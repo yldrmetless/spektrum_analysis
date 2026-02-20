@@ -354,33 +354,148 @@ class MainWindow:
     
     def create_interface(self) -> None:
         """Ana arayüzü oluşturur"""
-        # Notebook (sekmeli arayüz) oluştur
-        self.notebook = ttk.Notebook(self.root)
-        self.notebook.pack(fill="both", expand=True, padx=10, pady=10)
-        
-        # Spektrum sekmesi (altında grafik ve veri alt-sekmeleri olacak)
+        import tkinter as tk
+        import tkinter.font as tkfont
+
+        # Gizli tab stili (zaten _setup_spectrum_sub_notebook_style'da tanımlı ama
+        # farklı isimle bir tane daha oluşturalım)
+        style = ttk.Style()
+        try:
+            style.layout("MainHiddenTab.TNotebook", [
+                ("MainHiddenTab.TNotebook.client", {"sticky": "nswe"})
+            ])
+            style.configure("MainHiddenTab.TNotebook", borderwidth=0)
+            style.layout("MainHiddenTab.TNotebook.Tab", [])
+            style.configure("MainHiddenTab.TNotebook.Tab", padding=0, borderwidth=0)
+        except Exception:
+            pass
+
+        # Üst kısım: pill tab bar
+        top_bar = ttk.Frame(self.root)
+        top_bar.pack(anchor="w", padx=10, pady=(10, 0))
+
+        self._main_tab_buttons = {}
+
+        def _make_main_pill(parent, text, idx, icon=None):
+            """Ana sekmeler için pill buton oluşturur"""
+            from PIL import Image, ImageDraw, ImageTk
+            try:
+                fnt = tkfont.Font(family="Poppins", size=10, weight="bold")
+            except Exception:
+                fnt = tkfont.nametofont("TkDefaultFont").copy()
+                fnt.configure(size=10, weight="bold")
+
+            text_w = fnt.measure(text)
+            pad_x, pad_y = 24, 8
+            icon_space = 24 if icon else 0
+            w = text_w + pad_x * 2 + icon_space
+            h = fnt.metrics("linespace") + pad_y * 2
+            r = 12
+
+            parent_bg = style.lookup("TFrame", "background") or "#F0F0F0"
+            cvs = tk.Canvas(parent, width=w, height=h, bg=parent_bg,
+                        highlightthickness=0, cursor="hand2")
+            cvs._pill_images = {}
+            cvs._icon = icon
+
+            def _make_pill_image(bg_hex):
+                scale = 2
+                sw, sh, sr = w * scale, h * scale, r * scale
+                img = Image.new("RGBA", (sw, sh), (0, 0, 0, 0))
+                draw = ImageDraw.Draw(img)
+                draw.rounded_rectangle([0, 0, sw - 1, sh - 1], radius=sr, fill=bg_hex)
+                img = img.resize((w, h), Image.LANCZOS)
+                return img
+
+            def _draw(bg, fg):
+                cvs.delete("all")
+                key = (bg, fg)
+                if key not in cvs._pill_images:
+                    pil_img = _make_pill_image(bg)
+                    tk_img = ImageTk.PhotoImage(pil_img)
+                    cvs._pill_images[key] = tk_img
+                else:
+                    tk_img = cvs._pill_images[key]
+                cvs.create_image(w // 2, h // 2, image=tk_img)
+                
+                text_x = w // 2 + (icon_space // 2 if icon else 0)
+                if icon:
+                    cvs.create_image(pad_x, h // 2, image=icon, anchor="w")
+                cvs.create_text(text_x, h // 2, text=text, font=fnt, fill=fg)
+
+            _draw("#D4D4D4", "#4B5563")
+
+            def _on_click(e):
+                self.notebook.select(idx)
+                _refresh_main_tabs()
+
+            cvs.bind("<Button-1>", _on_click)
+            self._main_tab_buttons[idx] = (cvs, _draw)
+            return cvs
+
+        def _refresh_main_tabs():
+            try:
+                sel = self.notebook.index("current")
+            except Exception:
+                sel = 0
+            for i, (cvs, draw_fn) in self._main_tab_buttons.items():
+                if i == sel:
+                    draw_fn("#255BD0", "#FFFFFF")
+                else:
+                    draw_fn("#D4D4D4", "#4B5563")
+
+        # Pill tab'ları oluştur
+        icon0 = self.spectrum_icon if hasattr(self, 'spectrum_icon') and self.spectrum_icon else None
+        icon1 = self.earthquake_icon if hasattr(self, 'earthquake_icon') and self.earthquake_icon else None
+
+        pill0 = _make_main_pill(top_bar, "Spektrum Oluşturma", 0, icon0)
+        pill0.pack(side='left', padx=(0, 6))
+
+        pill1 = _make_main_pill(top_bar, "Deprem Kayıtları", 1, icon1)
+        pill1.pack(side='left', padx=(0, 6))
+
+        # Gizli tab'lı Notebook
+        self.notebook = ttk.Notebook(self.root, style="MainHiddenTab.TNotebook")
+        self.notebook.pack(fill="both", expand=True, padx=10, pady=(6, 10))
+        self.notebook.bind("<<NotebookTabChanged>>", lambda e: _refresh_main_tabs())
+
+        # Sekmeleri oluştur
         self.create_spectrum_tab()
-        
-        # Deprem Kayıtları sekmesi
         self.create_earthquake_records_tab()
+
+        # İlk tab'ı seçili başlat
+        _refresh_main_tabs()
 
         # Alt kısımda durum çubuğu
         try:
             status_frame = ttk.Frame(self.root)
             status_frame.pack(fill="x", side="bottom")
             self.status_var = tk.StringVar(value="Hazır")
-            self.status_label = ttk.Label(status_frame, textvariable=self.status_var, font=('Segoe UI', 9))
+            self.status_label = ttk.Label(status_frame, textvariable=self.status_var, font=('Poppins', 9))
             self.status_label.pack(anchor='w', padx=8, pady=2)
         except Exception:
             self.status_var = None
             self.status_label = None
     
+    def _setup_spectrum_sub_notebook_style(self):
+        """Notebook tab header'larını gizleyen stili oluşturur"""
+        try:
+            style = ttk.Style()
+            # Notebook tab alanını tamamen gizle
+            style.layout("HiddenTab.TNotebook", [
+                ("HiddenTab.TNotebook.client", {"sticky": "nswe"})
+            ])
+            style.configure("HiddenTab.TNotebook", borderwidth=0)
+            style.layout("HiddenTab.TNotebook.Tab", [])
+            style.configure("HiddenTab.TNotebook.Tab", padding=0, borderwidth=0)
+        except Exception:
+            pass
+
     def create_spectrum_tab(self) -> None:
         """Spektrum analiz sekmesini oluşturur"""
         self.spektrum_frame = ttk.Frame(self.notebook)
-        self.notebook.add(self.spektrum_frame, text="Spektrum Oluşturma",
-                         image=self.spectrum_icon if hasattr(self, 'spectrum_icon') and self.spectrum_icon else None,
-                         compound='left')
+        self.notebook.add(self.spektrum_frame, text="Spektrum Oluşturma")
+
         
         # Sol panel – kaydırılabilir kapsayıcı (sabit genişlik)
         left_holder = ttk.Frame(self.spektrum_frame)
@@ -412,9 +527,98 @@ class MainWindow:
         self.plot_frame = ttk.Frame(self.spektrum_frame, padding="10")
         self.plot_frame.pack(side="right", fill="both", expand=True)
 
-        # Sağ panel içinde alt-sekmeler (Notebook)
-        self.spectrum_sub_notebook = ttk.Notebook(self.plot_frame)
+        # Sağ panel içinde alt-sekmeler – gizli tab'lı Notebook + custom pill tab bar
+        self._setup_spectrum_sub_notebook_style()
+
+        # Custom pill tab bar
+        import tkinter as tk
+        import tkinter.font as tkfont
+
+        tab_bar = ttk.Frame(self.plot_frame)
+        tab_bar.pack(anchor="w", pady=(0, 6))
+
+        self._spectrum_tab_buttons = {}
+
+        def _make_pill_tab(parent, text, idx):
+            """PIL ile anti-aliased yuvarlak köşeli pill buton oluşturur"""
+            from PIL import Image, ImageDraw, ImageTk, ImageFont
+            try:
+                fnt = tkfont.Font(family="Poppins", size=10, weight="bold")
+            except Exception:
+                fnt = tkfont.nametofont("TkDefaultFont").copy()
+                fnt.configure(size=10, weight="bold")
+            text_w = fnt.measure(text)
+            pad_x, pad_y = 24, 8
+            w = text_w + pad_x * 2
+            h = fnt.metrics("linespace") + pad_y * 2
+            r = 12  # köşe yarıçapı
+
+            parent_bg = ttk.Style().lookup("TFrame", "background") or "#F0F0F0"
+            cvs = tk.Canvas(parent, width=w, height=h, bg=parent_bg,
+                           highlightthickness=0, cursor="hand2")
+
+            # PhotoImage referanslarını sakla (garbage collection engellenir)
+            cvs._pill_images = {}
+
+            def _make_pill_image(bg_hex, fg_hex):
+                """PIL ile anti-aliased pill görsel oluşturur (2x supersampling)"""
+                scale = 2  # supersampling faktörü
+                sw, sh, sr = w * scale, h * scale, r * scale
+                img = Image.new("RGBA", (sw, sh), (0, 0, 0, 0))
+                draw = ImageDraw.Draw(img)
+                draw.rounded_rectangle(
+                    [0, 0, sw - 1, sh - 1],
+                    radius=sr,
+                    fill=bg_hex
+                )
+                # Küçült (anti-aliasing efekti)
+                img = img.resize((w, h), Image.LANCZOS)
+                return img
+
+            def _draw(bg, fg):
+                cvs.delete("all")
+                key = (bg, fg)
+                if key not in cvs._pill_images:
+                    pil_img = _make_pill_image(bg, fg)
+                    tk_img = ImageTk.PhotoImage(pil_img)
+                    cvs._pill_images[key] = tk_img
+                else:
+                    tk_img = cvs._pill_images[key]
+                cvs.create_image(w // 2, h // 2, image=tk_img)
+                cvs.create_text(w // 2, h // 2, text=text, font=fnt, fill=fg)
+
+            _draw("#F3F4F6", "#4B5563")
+
+            def _on_click(e):
+                self.spectrum_sub_notebook.select(idx)
+                _refresh_all_tabs()
+
+            cvs.bind("<Button-1>", _on_click)
+            self._spectrum_tab_buttons[idx] = (cvs, _draw)
+            return cvs
+
+        def _refresh_all_tabs():
+            try:
+                sel = self.spectrum_sub_notebook.index("current")
+            except Exception:
+                sel = 0
+            for i, (cvs, draw_fn) in self._spectrum_tab_buttons.items():
+                if i == sel:
+                    draw_fn("#255BD0", "#FFFFFF")
+                else:
+                    draw_fn("#D4D4D4", "#4B5563")
+
+        tab_texts = ["Grafik", "Spektrum Veri Tablosu"]
+        for i, txt in enumerate(tab_texts):
+            pill = _make_pill_tab(tab_bar, txt, i)
+            pill.pack(side='left', padx=(0, 6))
+
+        # Notebook (tab'ları gizli)
+        self.spectrum_sub_notebook = ttk.Notebook(self.plot_frame, style="HiddenTab.TNotebook")
         self.spectrum_sub_notebook.pack(fill="both", expand=True)
+
+        # Notebook tab değiştiğinde pill'leri güncelle
+        self.spectrum_sub_notebook.bind("<<NotebookTabChanged>>", lambda e: _refresh_all_tabs())
 
         # 1) Grafik sekmesi
         self.spectrum_graph_tab = ttk.Frame(self.spectrum_sub_notebook)
@@ -422,14 +626,10 @@ class MainWindow:
 
         # 2) Spektrum Veri Tablosu sekmesi
         self.spectrum_data_tab = ttk.Frame(self.spectrum_sub_notebook)
-        # Alt sekmelerde ikon gösterimi opsiyoneldir; bazı temalarda görünmeyebilir
-        try:
-            self.spectrum_sub_notebook.add(
-                self.spectrum_data_tab,
-                text="Spektrum Veri Tablosu"
-            )
-        except Exception:
-            self.spectrum_sub_notebook.add(self.spectrum_data_tab, text="Spektrum Veri Tablosu")
+        self.spectrum_sub_notebook.add(self.spectrum_data_tab, text="Spektrum Veri Tablosu")
+
+        # İlk tab'ı seçili olarak başlat
+        _refresh_all_tabs()
 
         # Modüler bileşenleri oluştur
         self.input_panel = InputPanel(self.input_frame, self._on_data_loaded, design_params_model=getattr(self, 'design_params', None))
@@ -478,9 +678,8 @@ class MainWindow:
     def create_earthquake_records_tab(self) -> None:
         """Deprem kayıtları sekmesini oluşturur"""
         earthquake_tab = ttk.Frame(self.notebook)
-        self.notebook.add(earthquake_tab, text="Deprem Kayıtları", 
-                         image=self.earthquake_icon if hasattr(self, 'earthquake_icon') and self.earthquake_icon else None,
-                         compound='left')
+        self.notebook.add(earthquake_tab, text="Deprem Kayıtları")
+
         
         # Sol panel - Dosya yükleme ve liste (sabit genişlik)
         left_panel = ttk.Frame(earthquake_tab)

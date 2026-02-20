@@ -1500,9 +1500,10 @@ class PDFReportGenerator:
                         scale = min(max_w / pil_img.width, max_h / pil_img.height)
                         story.append(Image(dynamic_displacement_buf, width=pil_img.width * scale, height=pil_img.height * scale))
                         story.append(Spacer(1, 6))
+                        # Etiketleri kaldırıp doğrudan düz metin olarak yazıyoruz
                         caption_text = (
                             "Hesaplanan yatay elastik tasarım yerdeğiştirme spektrumu "
-                            "(T: periyot [s], S<sub>de</sub>(T): spektral yerdeğiştirme [m])."
+                            "(T: periyot [s], Sde(T): spektral yerdeğiştirme [m])."
                             if params.locale == "tr"
                             else "Computed horizontal elastic design displacement spectrum "
                             "(T: period [s], Sde(T): spectral displacement [m])."

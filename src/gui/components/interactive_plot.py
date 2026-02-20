@@ -248,7 +248,7 @@ class InteractivePlot:
         b.config(width=W16)
 
         b = RoundedButton(
-            bar, text="📋 PNG Kopyala",
+            bar, text="📋 PNG Kopyalaaaaa",
             image=self._action_icons.get("copy"),
             on_click=self._copy_png_to_clipboard,
             height=BTN_H, radius=R,

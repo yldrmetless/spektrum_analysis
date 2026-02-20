@@ -276,6 +276,15 @@ class PlotPanel:
             ax = self.axes_map['Yatay']
             h_info = spectrum_info['horizontal']
             period_array = spectrum_result['period_array']
+            
+            leg = ax.get_legend()
+            if leg:
+                leg.remove()
+                
+            if 'Yatay' in self._aux_artists:
+                for artist in self._aux_artists['Yatay']:
+                    artist.remove()
+                self._aux_artists['Yatay'] = []
 
             self._plot_single_spectrum_advanced(
                 ax,
@@ -297,20 +306,16 @@ class PlotPanel:
                 SDS = h_info.get('SDS'); SD1 = h_info.get('SD1')
 
                 text = []
-                if SDS is not None:
-                    text.append(f"$S_{{DS}}$={SDS:.3f}")
-                if SD1 is not None:
-                    text.append(f"$S_{{D1}}$={SD1:.3f}")
-                if TA is not None:
-                    text.append(f"$T_{{A}}$={TA:.3f}s")
-                if TB is not None:
-                    text.append(f"$T_{{B}}$={TB:.3f}s")
-                if TL is not None:
-                    text.append(f"$T_{{L}}$={TL:.3f}s")
+                if SDS is not None: text.append(f"$S_{{DS}}$={SDS:.3f}")
+                if SD1 is not None: text.append(f"$S_{{D1}}$={SD1:.3f}")
+                if TA is not None: text.append(f"$T_{{A}}$={TA:.3f}s")
+                if TB is not None: text.append(f"$T_{{B}}$={TB:.3f}s")
+                if TL is not None: text.append(f"$T_{{L}}$={TL:.3f}s")
 
                 if text:
+                    # y koordinatı 0.98'den 0.75'e çekildi (Lejantın altına yerleşmesi için)
                     box = ax.text(
-                        0.98, 0.98, "\n".join(text),
+                        0.97, 0.75, "\n".join(text),
                         transform=ax.transAxes,
                         ha='right', va='top',
                         fontsize=8,
@@ -318,7 +323,7 @@ class PlotPanel:
                             boxstyle='round,pad=0.3',
                             fc='white',
                             ec=CUSTOM_COLORS['grid'],
-                            alpha=0.85
+                            alpha=0.9
                         )
                     )
                     self._aux_artists['Yatay'].append(box)
@@ -331,11 +336,20 @@ class PlotPanel:
             ax = self.axes_map['Düşey']
             v_info = spectrum_info['vertical']
             period_array = spectrum_result['period_array']
+            
+            leg = ax.get_legend()
+            if leg: leg.remove()
+            if 'Düşey' in self._aux_artists:
+                for artist in self._aux_artists['Düşey']:
+                    artist.remove()
+                self._aux_artists['Düşey'] = []
+            
+            
             self._plot_single_spectrum_advanced(
                 ax, period_array, v_info['data'],
                 'Düşey Elastik Tasarım Spektrum Grafiği', 
                 'Spektral İvme, SₐₑD(T)',
-                'Düşey Elastik Tasarım Spektrumu',
+                'Düşey Elastik Tasarım Spektrumuaa',
                 CUSTOM_COLORS['dusey'],
                 v_info.get('unit', 'g'),
                 v_info,
@@ -353,13 +367,17 @@ class PlotPanel:
             try:
                 TAD = v_info.get('T_AD'); TBD = v_info.get('T_BD'); TLD = v_info.get('T_LD')
                 text = []
-                if TAD is not None: text.append(f"$T_{'{'}AD{'}'}$={TAD:.3f}s")
-                if TBD is not None: text.append(f"$T_{'{'}BD{'}'}$={TBD:.3f}s")
-                if TLD is not None: text.append(f"$T_{'{'}LD{'}'}$={TLD:.3f}s")
+                if TAD is not None: text.append(f"$T_{{AD}}$={TAD:.3f}s")
+                if TBD is not None: text.append(f"$T_{{BD}}$={TBD:.3f}s")
+                if TLD is not None: text.append(f"$T_{{LD}}$={TLD:.3f}s")
+                
                 if text:
-                    box = ax.text(0.98, 0.98, "\n".join(text), transform=ax.transAxes,
+                    # Lejant loc='upper right' (y=1.0) civarındadır. 
+                    # Bu kutuyu y=0.75 koordinatına çekerek lejantın altına alıyoruz.
+                    box = ax.text(0.97, 0.75, "\n".join(text), transform=ax.transAxes,
                                    ha='right', va='top', fontsize=8,
-                                   bbox=dict(boxstyle='round,pad=0.3', fc='white', ec=CUSTOM_COLORS['grid'], alpha=0.85))
+                                   bbox=dict(boxstyle='round,pad=0.3', fc='white', 
+                                             ec=CUSTOM_COLORS['grid'], alpha=0.9))
                     self._aux_artists['Düşey'].append(box)
             except Exception:
                 pass
@@ -369,6 +387,15 @@ class PlotPanel:
             ax = self.axes_map['Yerdeğiştirme']
             d_info = spectrum_info['displacement']
             period_array = spectrum_result['period_array']
+            
+            leg = ax.get_legend()
+            if leg: leg.remove()
+            if 'Yerdeğiştirme' in self._aux_artists:
+                for artist in self._aux_artists['Yerdeğiştirme']:
+                    artist.remove()
+                self._aux_artists['Yerdeğiştirme'] = []
+            
+            
             self._plot_single_spectrum_advanced(
                 ax, period_array, d_info['data'],
                 'Yerdeğiştirme Tasarım Spektrum Grafiği',
@@ -426,169 +453,160 @@ class PlotPanel:
                 ax.set_position([left, y0, width, height])
         except Exception as e:
             logger.debug("_apply_equal_layout failed: %s", e)
-    
+            
+            
     def _plot_single_spectrum_advanced(
         self,
         ax,
-        T,
-        values,
+        period_data,
+        acceleration_values,
         title_text,
         ylabel_text,
         line_label,
-        color,
+        line_color_input,
         unit,
         spectrum_info_dict,
         graph_type,
-        use_log_t=False
+        use_log_scale=False
     ):
-        """Spektrum grafiğini modern dashboard estetiğiyle çizer."""
+        """Plots the spectrum graph with a fixed grid and modern dashboard aesthetics."""
         
-        # --- MODERN TASARIM PARAMETRELERİ ---
+        # --- 1. CLEANUP ---
+        import matplotlib.pyplot as plt
+        import matplotlib.ticker as ticker
+        
+        ax.cla() 
+        
+        ax.xaxis.set_major_locator(ticker.AutoLocator())
+        ax.yaxis.set_major_locator(ticker.AutoLocator())
+        ax.xaxis.set_major_formatter(ticker.ScalarFormatter())
+        ax.yaxis.set_major_formatter(ticker.ScalarFormatter())
+        
+        while ax.lines:
+            ax.lines[0].remove()
+        for collection in ax.collections:
+            collection.remove()
+            
+        # --- MODERN DESIGN PARAMETERS ---
         MODERN_PALETTE = {
-            'line': '#3B82F6',      # Canlı Dashboard Mavisi
-            'fill': '#3B82F6',      # Dolgu rengi
-            'text_main': '#1E293B', # Slate-900 (Başlıklar)
-            'text_sub': '#64748B',  # Slate-500 (Etiketler/Tickler)
-            'grid': '#F1F5F9',      # Çok açık gri (Izgara)
-            'border': '#E2E8F0',    # Kenarlıklar
-            'bg': '#FFFFFF'         # Saf Beyaz Arkaplan
+            'line': '#3B82F6', 'fill': '#3B82F6', 'text_main': '#1E293B',
+            'text_sub': '#64748B', 'grid': '#F1F5F9', 'border': '#E2E8F0', 'bg': '#FFFFFF'
         }
         
-        # 1. Eski yardımcı çizimleri temizle
         try:
-            aux_list = self._aux_artists.get(graph_type, [])
-            for art in aux_list:
-                try: art.remove()
+            aux_artists_list = self._aux_artists.get(graph_type, [])
+            for artist in aux_artists_list:
+                try: artist.remove()
                 except: pass
             self._aux_artists[graph_type] = []
         except:
             self._aux_artists[graph_type] = []
 
-        # 2. Eksen ve Çerçeve (Spine) Ayarları
+        self.plot_lines = [line for line in self.plot_lines if line.axes != ax]
+
+        # 2. Axis and Spine Settings
         ax.set_facecolor(MODERN_PALETTE['bg'])
-        for spine in ['top', 'right']:
-            ax.spines[spine].set_visible(False)
+        for spine in ['top', 'right']: ax.spines[spine].set_visible(False)
         for spine in ['left', 'bottom']:
             ax.spines[spine].set_color(MODERN_PALETTE['border'])
             ax.spines[spine].set_linewidth(1.2)
 
-        # 3. Modern Izgara Sistemi
+        # 3. FIXED GRID SYSTEM (Independent of Units)
+        ax.grid(False)
+        # X Axis: Major grid line every 0.5 seconds
+        ax.xaxis.set_major_locator(ticker.MultipleLocator(0.5))
+        # Y Axis: Always roughly 6 horizontal divisions regardless of unit scale
+        
         ax.grid(True, which='major', linestyle='-', linewidth=0.8, color=MODERN_PALETTE['grid'], zorder=0)
         ax.set_axisbelow(True)
 
-        # 4. Spektrum Çizimi ve Modern Dolgu (Area Effect)
-        # Mevcut rengi koru ancak çizgiyi kalınlaştır ve altına yumuşak bir dolgu ekle
-        line_color = color if color else MODERN_PALETTE['line']
+        # 4. Spectrum Curve and Fill
+        final_color = line_color_input if line_color_input else MODERN_PALETTE['line']
+        main_line = ax.plot(period_data, acceleration_values, label=line_label, color=final_color, 
+                            linewidth=2.8, alpha=1.0, zorder=3, antialiased=True)[0]
         
-        line = ax.plot(
-            T, values, label=line_label, color=line_color, 
-            linewidth=2.8, alpha=1.0, zorder=3, antialiased=True
-        )[0]
-        self.line_map[graph_type] = line
-        self.plot_lines.append(line)
+        self.line_map[graph_type] = main_line
+        self.plot_lines.append(main_line)
 
-        # Çizgi altına hafif transparan dolgu
-        fill = ax.fill_between(T, values, color=line_color, alpha=0.08, zorder=2)
-        self._aux_artists[graph_type].append(fill)
+        area_fill = ax.fill_between(period_data, acceleration_values, color=final_color, alpha=0.08, zorder=2)
+        self._aux_artists[graph_type].append(area_fill)
+        self.plot_data.append({'T': period_data, 'values': acceleration_values, 'ax': ax, 'type': graph_type, 'unit': unit})
 
-        self.plot_data.append({'T': T, 'values': values, 'ax': ax, 'type': graph_type, 'unit': unit})
-
-        # 5. Başlık ve Etiketlerin Modernizasyonu
-        font_main = {'fontname': 'Segoe UI', 'fontweight': 'bold', 'size': 13}
-        font_sub = {'fontname': 'Segoe UI', 'fontweight': 'medium', 'size': 10}
-
-        ax.set_title(title_text, color=MODERN_PALETTE['text_main'], pad=12, **font_main)
+        # 5. Titles and Labels
+        main_font = {'fontname': 'Segoe UI', 'fontweight': 'bold', 'size': 13}
+        sub_font = {'fontname': 'Segoe UI', 'fontweight': 'medium', 'size': 10}
+        ax.set_title(title_text, color=MODERN_PALETTE['text_main'], pad=12, **main_font)
         
         dynamic_ylabel = self._get_dynamic_ylabel(ylabel_text, unit, graph_type)
-        ax.set_ylabel(dynamic_ylabel, color=MODERN_PALETTE['text_sub'], labelpad=10, **font_sub)
-        ax.set_xlabel('Periyot, T (saniye)', color=MODERN_PALETTE['text_sub'], labelpad=8, **font_sub)
+        ax.set_ylabel(dynamic_ylabel, color=MODERN_PALETTE['text_sub'], labelpad=10, **sub_font)
+        ax.set_xlabel('Periyot, T (saniye)', color=MODERN_PALETTE['text_sub'], labelpad=8, **sub_font)
 
-        # 6. Eksen Ölçeklendirme ve Limitler
-        if use_log_t:
+        # 6. Scaling
+        if use_log_scale:
             try:
-                Tmin = float(np.nanmin(T[T > 0])) if np.any(T > 0) else 1e-3
+                min_period = float(np.nanmin(period_data[period_data > 0])) if np.any(period_data > 0) else 1e-3
                 ax.set_xscale('log')
-                ax.set_xlim(left=max(1e-3, Tmin))
+                ax.set_xlim(left=max(1e-3, min_period))
             except: pass
         else:
             ax.set_xscale('linear')
-            xmax = float(np.nanmax(T)) if np.size(T) > 0 else None
-            ax.set_xlim(0, xmax) if xmax else ax.set_xlim(left=0)
+            max_period = float(np.nanmax(period_data)) if np.size(period_data) > 0 else None
+            ax.set_xlim(0, max_period) if max_period else ax.set_xlim(left=0)
 
-        # Y-ekseni otomatik sığdırma
-        y_max = float(np.nanmax(values)) if np.size(values) > 0 else 1.0
-        ax.set_ylim(0, y_max * 1.15)
+        max_val = float(np.nanmax(acceleration_values)) if np.size(acceleration_values) > 0 else 1.0
+        ax.set_ylim(0, max_val * 1.15)
+        ax.tick_params(axis='both', which='major', labelsize=9, colors=MODERN_PALETTE['text_sub'])
+        
+        y_top = ax.get_ylim()[1]
+        ax.yaxis.set_major_locator(ticker.MultipleLocator(y_top / 5))
+        ax.yaxis.set_major_formatter(ticker.FuncFormatter(
+            lambda val, pos: f'{val:.2f}' if y_top <= 10 else f'{int(val)}'
+        ))
+        
         ax.tick_params(axis='both', which='major', labelsize=9, colors=MODERN_PALETTE['text_sub'])
 
-        # 7. Kritik Nokta İşaretlemeleri (Sds, Sd1, Ta, Tb, Tl)
-        is_disp = spectrum_info_dict.get('is_displacement', False)
+        # 7. Design Parameters (TA, TB, TL)
+        is_displacement = spectrum_info_dict.get('is_displacement', False)
+        
         if graph_type == 'Düşey':
-            TA, TB, TL = spectrum_info_dict.get('T_AD'), spectrum_info_dict.get('T_BD'), spectrum_info_dict.get('T_LD')
+            pA, pB, pL = spectrum_info_dict.get('T_AD'), spectrum_info_dict.get('T_BD'), spectrum_info_dict.get('T_LD')
             sds_val = spectrum_info_dict.get('SDS_eff')
         else:
-            TA, TB, TL = spectrum_info_dict.get('TA'), spectrum_info_dict.get('TB'), spectrum_info_dict.get('TL')
+            pA, pB, pL = spectrum_info_dict.get('TA'), spectrum_info_dict.get('TB'), spectrum_info_dict.get('TL')
             sds_val = spectrum_info_dict.get('SDS')
 
-        y_offset = (ax.get_ylim()[1] - ax.get_ylim()[0]) * 0.04
-
-        # Plato Bölgesi (TA-TB) Vurgusu
-        if TA is not None and TB is not None and not is_disp:
-            span = ax.axvspan(TA, TB, color=line_color, alpha=0.05, zorder=1)
-            self._aux_artists[graph_type].append(span)
+        # 8. Vertical Parameter Lines (Dashed)
+        critical_periods = [p for p in [pA, pB, pL] if p is not None and np.isfinite(p)]
+        for p_val in critical_periods:
+            ax.axvline(x=p_val, color=MODERN_PALETTE['border'], linestyle='--', linewidth=1, alpha=0.6, zorder=1)
             
-            # SDS Metni (Platonun tam ortasında modern kutu)
+            # Label logic
+            tag = 'A' if p_val == pA else 'B' if p_val == pB else 'L'
+            label_suffix = 'D' if graph_type == 'Düşey' else ''
+            ax.text(p_val, ax.get_ylim()[1], f"$T_{{{tag}{label_suffix}}}$", 
+                    ha='center', va='bottom', fontsize=8, color=MODERN_PALETTE['text_sub'])
+
+        # X Tick Formatter for clean decimals
+        ax.xaxis.set_major_formatter(ticker.FormatStrFormatter('%.1f'))
+
+        # 9. SDS Summary Text and Legend
+        if pA is not None and pB is not None and not is_displacement:
             unit_info = UnitConverter.get_unit_info('acceleration', unit)
-            sds_text = f"$S_{{DS}} = {sds_val:.2f}$ {unit_info.get('symbol', unit)}"
-            txt = ax.text((TA + TB) / 2, sds_val + y_offset, sds_text, ha='center', va='bottom',
-                        fontsize=8, fontweight='bold', color=MODERN_PALETTE['text_main'],
-                        bbox=dict(boxstyle='round,pad=0.3', fc='white', ec=MODERN_PALETTE['border'], alpha=0.9))
-            self._aux_artists[graph_type].append(txt)
+            unit_symbol = unit_info.get('symbol', unit)
+            summary_text = f"$S_{{DS}} = {sds_val:.2f}$ {unit_symbol}"
+            
+            y_offset = (ax.get_ylim()[1] - ax.get_ylim()[0]) * 0.04
+            ax.text((pA + pB) / 2, sds_val - (y_offset * 0.3), summary_text, 
+                    ha='center', va='top', fontsize=8, fontweight='bold', 
+                    bbox=dict(boxstyle='round,pad=0.3', fc='white', ec=MODERN_PALETTE['border'], alpha=0.9))
 
-        # SD1 @ 1s İşaretçisi (Sadece Yatayda)
-        sd1_val = spectrum_info_dict.get('SD1')
-        if sd1_val is not None and graph_type == 'Yatay':
-            sae_at_1s = np.interp(1.0, T, values)
-            p, = ax.plot([1.0], [sae_at_1s], 'o', color='white', markeredgecolor=line_color, markersize=6, markeredgewidth=2, zorder=5)
-            sd1_text = f"$S_{{D1}}={sd1_val:.2f}$ @ 1s"
-            t = ax.text(1.0, sae_at_1s + y_offset, sd1_text, ha='center', va='bottom', fontsize=8,
-                        color=MODERN_PALETTE['text_main'], bbox=dict(boxstyle='round,pad=0.2', fc='white', ec=MODERN_PALETTE['border'], alpha=0.8))
-            self._aux_artists[graph_type].extend([p, t])
-
-        # 8. Kritik Periyot Çizgileri ve Tick Formatı
-        critical_v = [v for v in [TA, TB, TL] if v is not None]
-        for val in critical_v:
-            v_line = ax.axvline(x=val, color=MODERN_PALETTE['border'], linestyle='--', linewidth=1, alpha=0.8, zorder=1)
-            self._aux_artists[graph_type].append(v_line)
-            # Tepe etiketleri (T_A, T_B, T_L)
-            label = "$T_A$" if val == TA else "$T_B$" if val == TB else "$T_L$"
-            t_lab = ax.text(val, ax.get_ylim()[1], label, ha='center', va='bottom', fontsize=8, color=MODERN_PALETTE['text_sub'])
-            self._aux_artists[graph_type].append(t_lab)
-
-        # Tickleri güncelle (Kritik periyotları x eksenine ekle)
-        all_ticks = sorted(list(set(list(ax.get_xticks()) + critical_v)))
-        ax.set_xticks([t for t in all_ticks if t >= 0])
-        
-        def format_tick(val, pos):
-            for crit in critical_v:
-                if abs(val - crit) < 0.01: return f'{val:.2f}'
-            return f'{int(val)}' if val == int(val) else f'{val:.1f}'
-        ax.xaxis.set_major_formatter(plt.FuncFormatter(format_tick))
-
-        # 9. Modern Legend (Sağ Üst, Sadeleştirilmiş)
         try:
-            legend = ax.legend(
-                loc='upper right', frameon=True, shadow=False, fancybox=True,
-                edgecolor=MODERN_PALETTE['border'], fontsize=8, borderpad=0.8
-            )
-            legend.get_frame().set_facecolor('white')
-            legend.get_frame().set_alpha(0.9)
-            for text in legend.get_texts(): text.set_color(MODERN_PALETTE['text_sub'])
-            legend.set_draggable(True)
+            chart_legend = ax.legend(loc='upper right', frameon=True, edgecolor=MODERN_PALETTE['border'], fontsize=8)
+            chart_legend.get_frame().set_alpha(0.9)
         except: pass
 
         self.plotted_axes[graph_type] = ax
-
-
+        
     def _get_dynamic_ylabel(self, base_ylabel, unit, graph_type):
         """Birime göre dinamik Y-label oluşturur (yalnızca birim bilgisi dahil)"""
 
@@ -648,56 +666,93 @@ class PlotPanel:
 
 
     def _create_canvas(self):
-        """Matplotlib canvas'ını oluşturur"""
+        """Matplotlib canvas'ını oluşturur ve ikonları bozmadan değiştirir"""
         self.canvas = FigureCanvasTkAgg(self.figure, master=self.parent_frame)
         self.canvas.draw()
         self.canvas.get_tk_widget().pack(side="top", fill="both", expand=True)
 
-        # Mouse motion event'ini bağla
         self.canvas.mpl_connect('motion_notify_event', self._on_mouse_move)
-
-        # Klavye kısayolları: g=grid, l=log ölçek, r=referans çizgileri, c=crosshair görünürlüğü
         self.canvas.mpl_connect('key_press_event', self._on_key_press)
-
-        # Mouse tıklama: sol=pinle, sağ=kaldır
         self.canvas.mpl_connect('button_press_event', self._on_mouse_click)
-
-        # Blit için draw/resize eventleri
         self.canvas.mpl_connect('draw_event', self._on_draw_event)
 
-        # Toolbar ekle
         controls_parent = getattr(self, 'controls_frame', None) or self.parent_frame
 
         try:
             self.toolbar = NavigationToolbar2Tk(self.canvas, controls_parent, pack_toolbar=False)
-        except TypeError:
-            self.toolbar = NavigationToolbar2Tk(self.canvas, controls_parent)
+            self.toolbar.update()
 
-        try:
-            self.toolbar.pack_forget()
-        except Exception:
-            pass
+            if not hasattr(self, "_toolbar_image_refs"):
+                self._toolbar_image_refs = []
+            self._toolbar_image_refs.clear()
 
-        self.toolbar.update()
+            modern_icons_map = {
+                "Home":     "home_gray.png",
+                "Back":     "arrow_left.png",
+                "Forward":  "arrow_right.png",
+                "Pan":      "pan2.png",
+                "Zoom":     "zoom2.png",
+                "Subplots": "settings.png",
+                "Save":     "save2.png",
+            }
 
-        try:
-            self.toolbar.pack(side="left", padx=(4, 8), pady=(2, 6))
-        except Exception:
-            pass
+            for child in self.toolbar.winfo_children():
+                widget_class = child.winfo_class()
+                
+                if widget_class in ('Button', 'Checkbutton'):
+                    try:
+                        btn_text = child.cget("text")
+                        if btn_text in modern_icons_map:
+                            img = self._load_icon2(self._icons_dir / modern_icons_map[btn_text])
+                            if img:
+                                self._toolbar_image_refs.append(img)
+                                child._original_text = btn_text
 
-        try:
-            self._add_custom_toolbar_buttons()
+                                if widget_class == 'Checkbutton':
+                                    # Checkbutton: selectimage'ı da aynı ikon yap
+                                    # böylece seçili/seçilmemiş hali aynı görünür
+                                    child.configure(
+                                        image=img,
+                                        selectimage=img,
+                                        indicatoron=False,
+                                        text="",
+                                        relief="flat",
+                                        borderwidth=0,
+                                        highlightthickness=0,
+                                        compound="center",
+                                        offrelief="flat",
+                                        overrelief="flat",
+                                        selectcolor=child.cget("bg")
+                                    )
+                                else:
+                                    # Normal Button
+                                    child.configure(
+                                        image=img,
+                                        text="",
+                                        relief="flat",
+                                        borderwidth=0,
+                                        highlightthickness=0,
+                                        compound="center"
+                                    )
+                                
+                                child.configure(activebackground=child.cget("bg"))
+
+                        elif btn_text in ["Subplots", "Customize"]:
+                            child.pack_forget()
+                    except Exception as e:
+                        logger.debug(f"Button config error: {e}")
+                        continue
+
+            self.toolbar.pack(side="left", padx=(8, 0), pady=(2, 6))
+
         except Exception as e:
-            logger.debug("Legend outside placement failed, falling back: %s", e)
+            logger.debug("Toolbar hatası: %s", e)
 
         try:
             self._create_action_bar()
-        except Exception as e:
-            logger.debug("Action bar init failed: %s", e)
-
-        # Log X anahtarını toolbar'dan kaldırdık (klavye: L)
-
-
+        except Exception:
+            pass
+    
     def _clear_canvas(self):
         """Canvas'ı temizler"""
         if self.canvas:
@@ -1178,7 +1233,12 @@ class PlotPanel:
         try:
             if not event or not event.inaxes:
                 return
-
+            
+            try:
+                if self.toolbar and str(self.toolbar.mode) != "":
+                    return
+            except Exception:
+                pass
             ax = event.inaxes
 
             # İlgili plot_data'yı bul
@@ -1325,8 +1385,20 @@ class PlotPanel:
     
     
     def _load_icon(self, path: Path):
+        from PIL import Image, ImageTk
         try:
-            return PhotoImage(file=str(path))
+            img = Image.open(str(path)).convert("RGBA")
+            return ImageTk.PhotoImage(img)
+        except Exception as e:
+            print(f"İkon yüklenemedi: {path} -> {e}")
+            return None
+        
+    def _load_icon2(self, path: Path):
+        from PIL import Image, ImageTk
+        try:
+            img = Image.open(str(path)).convert("RGBA")
+            img = img.resize((24, 24), Image.Resampling.LANCZOS)
+            return ImageTk.PhotoImage(img)
         except Exception as e:
             print(f"İkon yüklenemedi: {path} -> {e}")
             return None
@@ -1389,7 +1461,32 @@ class PlotPanel:
         except Exception:
             pass
 
-
+    def _restore_toolbar_icons(self):
+        """Zoom/Pan sonrası toolbar ikonlarını orijinal hallerine zorla döndürür."""
+        try:
+            modern_icons_map = {
+                "Home":     "home_gray.png",
+                "Back":     "arrow_left.png",
+                "Forward":  "arrow_right.png",
+                "Pan":      "pan2.png",
+                "Zoom":     "zoom2.png",
+                "Save":     "save2.png",
+            }
+            for child in self.toolbar.winfo_children():
+                if "button" in str(child).lower():
+                    try:
+                        btn_text = getattr(child, '_original_text', '')
+                        if btn_text in modern_icons_map:
+                            img = self._load_icon2(self._icons_dir / modern_icons_map[btn_text])
+                            if img:
+                                if not hasattr(self, '_toolbar_image_refs'):
+                                    self._toolbar_image_refs = []
+                                self._toolbar_image_refs.append(img)
+                                child.configure(image=img, text="", compound="center")
+                    except Exception:
+                        continue
+        except Exception:
+            pass
 
     def _toolbar_action(self, action: str):
         """Matplotlib toolbar aksiyonlarını tetikler ve durumu günceller."""
@@ -1412,7 +1509,6 @@ class PlotPanel:
                 self.status_label.config(text=status)
         except Exception as e:
             logger.debug("Toolbar action failed (%s): %s", action, e)
-
 
     def _copy_png_to_clipboard(self):
         """Figure'ı PNG olarak panoya kopyalar (Windows'ta CF_DIB; aksi halde kaydet)"""
