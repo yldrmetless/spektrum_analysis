@@ -1015,32 +1015,34 @@ class InputPanel:
         import tkinter as tk
         from tkinter import font as tkfont
 
-        hesapla_frame = tk.Frame(self.parent_frame, bg="#FFFFFF")
-        hesapla_frame.pack(fill="x", pady=(4, 6), padx=0)
+        try:
+            parent_bg_color = self.parent_frame.cget("bg")
+        except tk.TclError:
+            parent_bg_color = "#F0F0F0" 
 
-        # Font: mevcut TkDefaultFont (Poppins) kalsın, sadece bold yap
+        calculate_frame = tk.Frame(self.parent_frame, bg=parent_bg_color)
+        calculate_frame.pack(fill="x", pady=(4, 6), padx=0)
+
         try:
             f = tkfont.nametofont("TkDefaultFont").copy()
             f.configure(size=f.cget("size") + 1, weight="bold")
         except Exception:
             f = None
 
-        # RoundedButton: command/on_click vermiyoruz -> akışa dokunmuyoruz
         self.hesapla_button = RoundedButton(
-            hesapla_frame,
+            calculate_frame,
             text="SPEKTRUMLARI HESAPLA",
-            image=self.spectrum_icon if self.spectrum_icon else None,  # tk.PhotoImage
+            image=self.spectrum_icon if self.spectrum_icon else None,
             height=52,
             radius=12,
             btn_bg="#2F6FED",
             hover_bg="#2A62D8",
             fg="white",
             font=f,
-            canvas_bg="#FFFFFF"
+            canvas_bg=parent_bg_color
         )
         self.hesapla_button.pack(fill="x")
 
-        # başlangıçta disabled (eski davranış)
         self.hesapla_button.configure(state="disabled")
 
    
@@ -1078,8 +1080,8 @@ class InputPanel:
             self.parent_frame,
             radius=12,
             card_bg=BG,
-            border_color=BORDER,
-            border_width=1,
+            border_color=BG,
+            border_width=0,
             canvas_bg=canvas_bg
         )
         card.pack(fill="x", pady=(0, 10), padx=0, anchor="n")
@@ -1087,7 +1089,6 @@ class InputPanel:
         content = tk.Frame(card.content, bg=BG)
         content.pack(fill="x", padx=14, pady=14)
 
-        # Başlık font
         try:
             base = tkfont.nametofont("TkDefaultFont")
             title_font = base.copy()
@@ -1109,12 +1110,13 @@ class InputPanel:
             content,
             radius=12,
             card_bg=PANEL_BG,
-            border_color=PANEL_BORDER,
-            border_width=1,
+            border_color=PANEL_BG,
+            border_width=0,
             canvas_bg=BG
         )
         panel.pack(fill="x")
 
+        # Senin orijinal değişken ismin KORUNDU
         panel_in = tk.Frame(panel.content, bg=PANEL_BG)
         panel_in.pack(fill="x", padx=14, pady=14)
 
@@ -1239,7 +1241,7 @@ class InputPanel:
         _row(panel_in, "Fs",   self.fs_var,  "Kısa periyot zemin katsayısı")
         _row(panel_in, "F₁",   self.f1_var,  "1.0 sn periyot zemin katsayısı")
 
-        _row(panel_in, "Sᴅₛ",  self.sds_var, "Kısa periyot tasarım spektral katsayısı")
+        _row(panel_in, "Sᴅꜱ",  self.sds_var, "Kısa periyot tasarım spektral katsayısı")
         _row(panel_in, "Sᴅ₁",  self.sd1_var, "1.0 sn periyot tasarım spektral katsayısı")
         _row(panel_in, "Tʟ",   self.tl_var,  "Uzun periyot geçiş periyodu", add_sep=False)
                 
@@ -1487,13 +1489,12 @@ class InputPanel:
         if not hasattr(self, "_dropdown_menus"):
             self._dropdown_menus = {}
 
-        # === DIŞ KART (rounded) ===
         card = RoundedCard(
             self.parent_frame,
             radius=12,
             card_bg=BG,
-            border_color=BORDER,
-            border_width=1,
+            border_color=BG,
+            border_width=0,
             canvas_bg=canvas_bg
         )
         card.pack(fill="x", pady=(10, 0), padx=0, anchor="n")
@@ -1501,7 +1502,6 @@ class InputPanel:
         content = tk.Frame(card.content, bg=BG)
         content.pack(fill="x", padx=14, pady=14)
 
-        # Başlık font
         try:
             base = tkfont.nametofont("TkDefaultFont")
             title_font = base.copy()
@@ -1523,8 +1523,8 @@ class InputPanel:
             content,
             radius=12,
             card_bg=PANEL_BG,
-            border_color=PANEL_BORDER,
-            border_width=1,
+            border_color=PANEL_BG,
+            border_width=0,
             canvas_bg=BG
         )
         panel.pack(fill="x")
@@ -2096,18 +2096,22 @@ class InputPanel:
             except Exception:
                 pass
             self.report_progress.grid_remove()
-        if hasattr(self, 'peer_btn'):
-            # Spektrum sonrası PEER aktarımını da aktif edebiliriz
-            try:
-                self.peer_btn.config(state="normal")
-            except Exception:
-                pass
-    
+
     def enable_save_button(self):
         """Grafik kaydet tuşunu aktif eder"""
         if hasattr(self, 'save_graph_btn'):
             self.save_graph_btn.config(state="normal")
             print("💾 Grafik kaydet tuşu aktif edildi")
+            
+    def enable_peer_export_button(self):
+        """PEER aktarım butonunu aktif eder"""
+        if hasattr(self, 'peer_btn'):
+            self.peer_btn.config(state="normal")
+
+    def disable_peer_export_button(self):
+        """PEER aktarım butonunu devre dışı bırakır"""
+        if hasattr(self, 'peer_btn'):
+            self.peer_btn.config(state="disabled")
     
     def disable_save_button(self):
         """Grafik kaydet tuşunu devre dışı bırakır"""

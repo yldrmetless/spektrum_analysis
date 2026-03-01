@@ -127,7 +127,7 @@ class SpectrumCalculator:
         T: ArrayLike,
         SDS: float,
         SD1: float,
-        TL: float = DEFAULT_TL,
+        TL: float,
         return_period_arrays: bool = False,
     ) -> Union[
         Tuple[np.ndarray, float, float],
@@ -439,11 +439,13 @@ class SpectrumCalculator:
     # ---------------------------------------------------------------------
     # 5)  TÜM SPEKTRUMLARIN HESAPLANMASI
     # ---------------------------------------------------------------------
+    
+    _TL_SENTINEL = object()
     def calculate_all_spectra(
         self,
         SDS: float,
         SD1: float,
-        TL: float = DEFAULT_TL,
+        TL: float = _TL_SENTINEL,
         include_horizontal: bool = True,
         include_vertical: bool = True,
         include_displacement: bool = False,
@@ -469,6 +471,15 @@ class SpectrumCalculator:
         Döndürür:
             Dict[str, Any]: DataFrame, periyot dizisi ve spektrum bilgilerini içeren sözlük
         """
+        if TL is self._TL_SENTINEL:
+            TL = DEFAULT_TL
+            warnings.warn(
+                f"calculate_all_spectra: TL explicit geçirilmedi, "
+                f"DEFAULT_TL={DEFAULT_TL} kullanılıyor. "
+                f"GUI'den çağrılıyorsa bu muhtemelen bir bug'dır.",
+                UserWarning,
+                stacklevel=2,
+            )
 
         # Input validation
         self.validate_inputs(SDS, SD1, TL)

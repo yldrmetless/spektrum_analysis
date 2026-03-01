@@ -80,18 +80,30 @@ class CoefficientCalculator:
                 )
                 ss_clamped = ss_max
 
+            # FIX: S1 için de Ss ile aynı clamp politikası uygulanıyor.
+            # TBDY-2018 Tablo 2.2'de son sütun "S1 >= 0.60" şeklinde tanımlıdır;
+            # bu, 0.60 üzerindeki değerlerin son sütun katsayısıyla ele alınması
+            # gerektiği anlamına gelir (hata fırlatılmamalı).
             s1_clamped = max(s1, s1_min)
 
-            if s1 > s1_max:
-                logger.error(
-                    "S1 degeri aralik disinda: %.3f (gecerli aralik %.2f-%.2f)",
+            if s1 < s1_min:
+                logger.warning(
+                    "S1 degeri %.3f alt sinir %.2f'in altinda; %.2f kullanilacak.",
                     s1,
                     s1_min,
+                    s1_min,
+                )
+
+            if s1 > s1_max:
+                logger.warning(
+                    "S1 degeri %.3f ust sinir %.2f'in ustunde; %.2f kullanilacak "
+                    "(S1>=%.2f icin tablo sabiti).",
+                    s1,
+                    s1_max,
+                    s1_max,
                     s1_max,
                 )
-                raise ValueError(
-                    f"S1 degeri {s1:.3f} gecerli aralik disinda ({s1_min}-{s1_max})."
-                )
+                s1_clamped = s1_max
 
             # Fs katsayisini hesapla (dogrusal interpolasyon)
             fs = np.interp(ss_clamped, ss_points, FS_VALUES[soil_class])

@@ -94,12 +94,22 @@ except Exception:
 plt.ioff()
 
 class ScrollableFrame(ttk.Frame):
-    """Dikey kaydırılabilir çerçeve (Canvas + Scrollbar)"""
+    """Dikey kaydırılabilir çerçeve (Canvas + CTkScrollbar)"""
     def __init__(self, parent, **kwargs):
         super().__init__(parent, **kwargs)
+        import customtkinter as ctk
 
         self.canvas = tk.Canvas(self, borderwidth=0, highlightthickness=0)
-        self.vbar = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        self.vbar = ctk.CTkScrollbar(
+            self,
+            orientation="vertical",
+            command=self.canvas.yview,
+            width=16,
+            button_color="#C0C0C0",
+            button_hover_color="#A0A0A0",
+            fg_color="transparent",
+            corner_radius=4,
+        )
         self.canvas.configure(yscrollcommand=self.vbar.set)
 
         self.vbar.pack(side="right", fill="y")
@@ -109,7 +119,7 @@ class ScrollableFrame(ttk.Frame):
         self.content = ttk.Frame(self.canvas)
         self._win = self.canvas.create_window((0, 0), window=self.content, anchor="nw")
 
-        # Scrollregion ve geniÅŸlik senkronu
+        # Scrollregion ve genişlik senkronu
         self.content.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
         self.canvas.bind("<Configure>", lambda e: self.canvas.itemconfigure(self._win, width=e.width))
 
@@ -3182,6 +3192,54 @@ class MainWindow:
                 self._open_dialog_running = False
             except Exception:
                 pass
+            
+    def _validate_coordinates_before_calc(self, lat: float, lon: float) -> bool:
+        """
+        Hesaplama öncesi koordinat doğrulaması.
+        Returns True: devam et, False: iptal.
+        """
+        # 1. Fiziksel aralık kontrolü
+        is_valid, msg = MapUtils.validate_coordinates(lat, lon)
+        if not is_valid:
+            messagebox.showerror("Geçersiz Koordinat", msg, parent=self.root)
+            return False
+
+        # 2. Türkiye sınır kontrolü (uyarı + onay)
+        if not MapUtils.is_in_turkey(lat, lon):
+            bounds = MapUtils.get_turkey_bounds()
+            devam = messagebox.askyesno(
+                "Koordinat Uyarısı",
+                f"Girilen koordinat ({lat:.4f}, {lon:.4f}) Türkiye sınırları dışında.\n\n"
+                f"Türkiye sınırları:\n"
+                f"  Enlem:  {bounds['min_lat']}° – {bounds['max_lat']}°\n"
+                f"  Boylam: {bounds['min_lon']}° – {bounds['max_lon']}°\n\n"
+                f"Yine de hesaplamaya devam etmek istiyor musunuz?\n"
+                f"(Sonuçlar en yakın grid noktasına ait olabilir.)",
+                parent=self.root
+            )
+            if not devam:
+                return False
+
+        # 3. AFAD grid kapsama kontrolü (uyarı + onay)
+        try:
+            if (hasattr(self, 'data_processor') and self.data_processor and
+                hasattr(self.data_processor, 'validate_coordinates')):
+                if not self.data_processor.validate_coordinates(lat, lon):
+                    devam = messagebox.askyesno(
+                        "Kapsam Uyarısı",
+                        f"Girilen koordinat ({lat:.4f}, {lon:.4f}) AFAD veri seti "
+                        f"kapsama alanı dışında.\n\n"
+                        f"Hesaplama en yakın grid noktasının değerlerini kullanacaktır. "
+                        f"Bu durum yanlış tasarım parametresi riski oluşturabilir.\n\n"
+                        f"Devam etmek istiyor musunuz?",
+                        parent=self.root
+                    )
+                    if not devam:
+                        return False
+        except Exception as e:
+            self.logger.debug(f"AFAD kapsam kontrolü hatası: {e}")
+
+        return True
     
     def run_calculation_and_plot(self) -> None:
         """Hesaplama yapar ve grafik çizer"""
@@ -3203,6 +3261,10 @@ class MainWindow:
             lon = float(params["lon"])
             dd = params["earthquake_level"]
             zemin = params["soil_class"]
+            
+            
+            if not self._validate_coordinates_before_calc(lat, lon):
+                return
             
             self.logger.info(f"Koordinatlar: {lat}, {lon}, DD: {dd}, Zemin: {zemin}")
             
@@ -3283,11 +3345,74 @@ class MainWindow:
             return
         
         try:
+            # Spektrum seçeneklerini al
+            spectrum_options = self.input_panel.get_spectrum_options()
+            self.logger.debug(f"Spektrum seçenekleri: {spectrum_options}")
+            
+            # Birim ayarlarını al
+            unit_settings = self.input_panel.get_unit_settings()
+            target_acc_unit = unit_settings["acceleration_unit"]
+            target_disp_unit = unit_settings["displacement_unit"]
+            self.logger.debug(f"Birim ayarları: İvme={target_acc_unit}, Yerdeğiştirme={target_disp_unit}")
+            
+        except Exception as e:
+            self.logger.exception(f"Ayarlar okuma hatası: {e}")
+            messagebox.showerror("Ayar Hatası", f"Spektrum ayarları okunurken hata: {str(e)}", parent=self.root)
+            return
+        
+        try:
+            # ── TL: kullanıcı modelinden oku (tek kaynak ilkesi) ──
+            # Öncelik sırası:
+            #   1. design_params.tl_var  (ortak model, InputPanel ile paylaşılır)
+            #   2. input_panel.tl_var    (fallback — aynı değişken olabilir)
+            #   3. DEFAULT_TL            (son çare — ve WARNING logu bırakılır)
+            tl = None
+            for source_name, source in [
+                ("design_params", getattr(self, "design_params", None)),
+                ("input_panel",   getattr(self, "input_panel", None)),
+            ]:
+                if source is not None and hasattr(source, "tl_var"):
+                    try:
+                        tl = float(source.tl_var.get())
+                        if tl > 0:
+                            self.logger.info(
+                                "TL = %.2f s (%s.tl_var'dan okundu)", tl, source_name
+                            )
+                            break
+                        else:
+                            tl = None  # geçersiz, sonraki kaynağı dene
+                    except (ValueError, TypeError, tk.TclError):
+                        tl = None
+            tl = None
+            try:
+                ref_text = self.input_panel.ref_periods_var.get().strip()
+                if ref_text:
+                    parts = [p.strip() for p in ref_text.split(",") if p.strip()]
+                    if parts:
+                        tl = float(parts[-1])  # son değer = TL
+                        self.logger.info("TL = %.2f s (referans periyot alanının son değerinden)", tl)
+            except (ValueError, TypeError, AttributeError):
+                tl = None
+
+            if tl is None or tl <= 0:
+                from src.config.constants import DEFAULT_TL
+                tl = DEFAULT_TL
+                self.logger.warning(
+                    "TL referans periyotlardan okunamadı; DEFAULT_TL=%.1f kullanılıyor.", tl
+                )
+
+            # TL'yi UI'ya yansıt
+            if self.design_params and hasattr(self.design_params, 'tl_var'):
+                self.design_params.tl_var.set(str(tl))
+
             # Spektrumları hesapla (arka planda)
+            if self.design_params and hasattr(self.design_params, 'tl_var'):
+                self.design_params.tl_var.set(str(tl))
             self.logger.info("Spektrumlar arka planda hesaplanıyor...")
             def _calc():
                 return self.spectrum_calculator.calculate_all_spectra(
                     SDS, SD1,
+                    TL=tl,
                     include_horizontal=spectrum_options["horizontal"],
                     include_vertical=spectrum_options["vertical"],
                     include_displacement=spectrum_options["displacement"]
@@ -3295,10 +3420,7 @@ class MainWindow:
             def _on_calc_done(spectrum_result):
                 try:
                     self.logger.info("Spektrum hesaplaması tamamlandı")
-                    self.logger.debug(f"DataFrame shape: {spectrum_result['dataframe'].shape}")
-                    self.logger.debug(f"Spektrum türleri: {list(spectrum_result['spectrum_info'].keys())}")
-                    # Devam: veri işleme ve çizim aynı akışla
-                    self._on_spectrum_calculated(spectrum_result, target_acc_unit, target_disp_unit, spectrum_options, ss, s1, fs, f1, SDS, SD1, lat, lon, zemin, dd)
+                    self._on_spectrum_calculated(spectrum_result, target_acc_unit, target_disp_unit, spectrum_options, ss, s1, fs, f1, SDS, SD1, lat, lon, zemin, dd, tl)
                 except Exception as ie:
                     self.logger.exception(f"Hesaplama sonrası hata: {ie}")
             def _on_calc_err(err):
@@ -3328,6 +3450,7 @@ class MainWindow:
         lon: float,
         zemin: str,
         dd: str,
+        tl: float,
     ) -> None:
         """Arka plan spektrum hesaplaması tamamlandığında UI güncellemelerini yapar."""
         try:
@@ -3400,6 +3523,7 @@ class MainWindow:
             'F1': f1,
             'SDS': SDS,
             'SD1': SD1,
+            'TL': tl,
             'soil_class': zemin,
             'earthquake_level': dd,
             'latitude': lat,
@@ -3409,67 +3533,6 @@ class MainWindow:
         }
         self.logger.info("Hesaplama sonuçları saklandı (PDF raporu için hazır)")
 
-        # Spektrum hesaplama tamamlandı - harita, rapor ve grafik kaydet tuşlarını aktif et
-        try:
-            self.input_panel.enable_map_button()
-            self.input_panel.enable_report_button()
-            self.input_panel.enable_save_button()
-        except Exception as e:
-            self.logger.debug(f"Tuş aktifleştirme hatası: {e}")
-        
-        try:
-            # Grafik çiz
-            self.logger.info("Grafikler çiziliyor...")
-            if not hasattr(self, 'plot_panel') or self.plot_panel is None:
-                self.logger.error("Plot panel bulunamadı!")
-                messagebox.showerror("Grafik Hatası", "Grafik paneli bulunamadı!", parent=self.root)
-                return
-                
-            self.plot_panel.plot_spectra(spectrum_result, spectrum_options)
-            self.logger.info("Grafikler başarıyla çizildi")
-            
-        except Exception as e:
-            self.logger.exception(f"Grafik çizme hatası: {e}")
-            messagebox.showerror("Grafik Hatası", f"Grafikler çizilirken hata: {str(e)}", parent=self.root)
-            # Grafik hatası olsa bile veri tablosunu güncellemeye devam et
-        
-        try:
-            # Veri tablolarını güncelle
-            self.logger.info("Veri tabloları güncelleniyor...")
-            if hasattr(self, 'data_table') and self.data_table is not None:
-                self.data_table.set_dataframe(spectrum_result['dataframe'])
-                self.logger.info("Veri tabloları güncellendi")
-                # PEER aktarım butonunu aktif et
-                try:
-                    self.input_panel.enable_peer_export_button()
-                except Exception:
-                    pass
-            else:
-                self.logger.warning("Veri tablosu bulunamadı")
-                
-        except Exception as e:
-            self.logger.exception(f"Tablo güncelleme hatası: {e}")
-            messagebox.showerror("Tablo Hatası", f"Veri tabloları güncellenirken hata: {str(e)}")
-        
-        self.logger.info("Spektrum hesaplama işlemi tamamlandı!")
-        
-        # Hesaplama sonuçlarını sakla (PDF raporu için gerekli)
-        self.calculation_results = {
-            'Ss': ss,
-            'S1': s1,
-            'Fs': fs,
-            'F1': f1,
-            'SDS': SDS,
-            'SD1': SD1,
-            'soil_class': zemin,
-            'earthquake_level': dd,
-            'latitude': lat,
-            'longitude': lon,
-            'spectrum_data': spectrum_result,
-            'calculation_timestamp': time.time()
-        }
-        self.logger.info("Hesaplama sonuçları saklandı (PDF raporu için hazır)")
-        
         # Spektrum hesaplama tamamlandı - harita, rapor ve grafik kaydet tuşlarını aktif et
         try:
             self.input_panel.enable_map_button()
@@ -3577,14 +3640,23 @@ class MainWindow:
             if not hasattr(self, 'spectrum_data') or not self.spectrum_data:
                 messagebox.showwarning("Veri Yok", "Önce spektrumları hesaplayın.", parent=self.root)
                 return
-
-            # 2. POP-UP DİALOGU AÇ
+            
             dialog = PeerExportDialog(self.root)
-            multiplier = dialog.get_result()
 
-            # İptal basıldıysa multiplier None döner, işlemi durdur
-            if multiplier is None:
+            dialog_result = dialog.get_result()
+
+            # İptal basıldıysa None döner
+            if dialog_result is None:
                 return
+
+            # Geriye uyumluluk: eski dialog float döndürüyordu
+            if isinstance(dialog_result, (int, float)):
+                dialog_result = {"mode": "multiply_all", "multiplier": float(dialog_result)}
+
+            mode = dialog_result.get("mode", "default")
+            multiplier = dialog_result.get("multiplier", 1.0)
+            t1 = dialog_result.get("t1", 0.0)
+            t2 = dialog_result.get("t2", 0.0)
 
             # 3. VERİLERİ HAZIRLA
             spectrum_info = self.spectrum_data.get('spectrum_info', {})
@@ -3631,14 +3703,27 @@ class MainWindow:
 
             # X ekseni (t) sabit kalıyor, Y ekseni (sa) multiplier ile çarpılıyor
             for t, sa in zip(period_values, acceleration_values):
-                scaled_sa = sa * multiplier 
+                if mode == "multiply_range":
+                    scaled_sa = sa * multiplier if t1 <= t <= t2 else sa
+                elif mode == "multiply_all":
+                    scaled_sa = sa * multiplier
+                else:
+                    scaled_sa = sa
                 lines.append(f"{t:.6g},{scaled_sa:.6g}")
 
             with open(file_path, 'w', encoding='utf-8') as f:
                 for line in lines:
                     f.write(line + '\n')
 
-            messagebox.showinfo("Başarılı", f"Spektrum CSV olarak kaydedildi. (Çarpan: {multiplier})", parent=self.root)
+            if mode == "multiply_range":
+                info_msg = (f"Spektrum CSV olarak kaydedildi.\n"
+                           f"T = {t1}s – {t2}s aralığı × {multiplier}\n"
+                           f"Aralık dışı değerler olduğu gibi bırakıldı.")
+            elif mode == "multiply_all":
+                info_msg = f"Spektrum CSV olarak kaydedildi. (Tüm değerler × {multiplier})"
+            else:
+                info_msg = "Spektrum CSV olarak kaydedildi. (Çarpan: 1.0)"
+            messagebox.showinfo("Başarılı", info_msg, parent=self.root)
 
         except Exception as e:
             messagebox.showerror("Aktarım Hatası", f"Hata oluştu: {str(e)}", parent=self.root)
@@ -3743,12 +3828,18 @@ class MainWindow:
                 
                 # SDS değerini spektrum sonuçlarından al
                 try:
-                    if hasattr(self, 'spectrum_data') and self.spectrum_data:
-                        spectrum_info = self.spectrum_data.get('spectrum_info', {})
-                        horizontal_info = spectrum_info.get('horizontal', {})
+                    # Önce calculation_results'tan al (daima g cinsinden)
+                    if hasattr(self, 'calculation_results') and self.calculation_results:
+                        sds_value = self.calculation_results.get('SDS')
+                        if sds_value is not None:
+                            self.logger.debug(f"SDS değeri bulundu (calculation_results): {sds_value:.4f} g")
+                    # Fallback: original_spectrum_info (daima g cinsinden)
+                    elif hasattr(self, 'spectrum_data') and self.spectrum_data:
+                        orig_info = self.spectrum_data.get('original_spectrum_info', {})
+                        horizontal_info = orig_info.get('horizontal', {})
                         if 'SDS' in horizontal_info:
                             sds_value = horizontal_info['SDS']
-                            self.logger.debug(f"SDS deÄŸeri bulundu: {sds_value:.4f} g")
+                            self.logger.debug(f"SDS değeri bulundu (original_spectrum_info): {sds_value:.4f} g")
                         
                 except Exception as e:
                     self.logger.exception(f"SDS değeri alma hatası: {e}")
@@ -6015,6 +6106,12 @@ TBDY-2018 uyumlu spektrum analiz araçları
             lon = float(params["lon"])
             dd = params["earthquake_level"]
             zemin = params["soil_class"]
+            
+            
+            
+            if not self._validate_coordinates_before_calc(lat, lon):
+                return
+            
             ss, s1 = self.data_processor.get_parameters_for_location(lat, lon, dd)
             if ss is None:
                 messagebox.showerror("Veri Hatası", "AFAD verileri alınamadı.", parent=self.root)

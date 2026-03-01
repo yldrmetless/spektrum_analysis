@@ -85,19 +85,6 @@ class MapUtils:
     def create_location_map(lat, lon, earthquake_level=None, soil_class=None, geojson_data=None, sds_value=None, afad_pga_value=None, zoom_start=12):
         """
         Belirtilen koordinatlarda harita oluşturur ve tarayıcıda açar
-        
-        Args:
-            lat (float): Enlem
-            lon (float): Boylam
-            earthquake_level (str, optional): Deprem düzeyi
-            soil_class (str, optional): Zemin sınıfı
-            geojson_data (dict, optional): GeoJSON FeatureCollection verisi
-            sds_value (float, optional): Spektrum hesaplama sonucu SDS değeri
-            afad_pga_value (float, optional): AFAD veri setinden PGA değeri
-            zoom_start (int): Başlangıç zoom seviyesi
-            
-        Returns:
-            bool: İşlem başarılı olursa True
         """
         if not FOLIUM_AVAILABLE:
             raise ImportError("Harita özelliği için 'folium' kütüphanesini kurun: pip install folium")
@@ -116,16 +103,14 @@ class MapUtils:
             is_in_turkey = MapUtils.is_in_turkey(lat, lon)
             
             if is_in_turkey:
-                # Türkiye içindeyse analiz noktasına odaklan
                 map_center = [lat, lon]
-                zoom_level = zoom_start if zoom_start != 12 else 12  # Default 12 kullan
+                zoom_level = zoom_start if zoom_start != 12 else 12
             else:
-                # Türkiye dışındaysa Türkiye merkezini kullan
                 map_center = list(MapUtils.get_turkey_center())
-                zoom_level = 6  # Türkiye genelini göster
+                zoom_level = 6
             
-            # Harita oluştur - analiz noktası odaklı
-            m = folium.Map(location=map_center, zoom_start=zoom_level, tiles='OpenStreetMap')
+            # Harita oluştur
+            m = folium.Map(location=map_center, zoom_start=zoom_level, tiles='OpenStreetMap', min_zoom=5)
             
             # Farklı harita katmanları ekle
             folium.TileLayer(
@@ -152,7 +137,7 @@ class MapUtils:
                 control=True
             ).add_to(m)
             
-            # Türkiye sınırlarını ayarla (ama fit etme - manuel zoom korunsun)
+            # Türkiye sınırlarını ayarla
             bounds = MapUtils.get_turkey_bounds()
             m.options.update({
                 'maxBounds': [[bounds["min_lat"] - 1, bounds["min_lon"] - 1], 
@@ -160,154 +145,108 @@ class MapUtils:
                 'maxBoundsViscosity': 1.0
             })
             
-            # Mini map eklentisi ekle
-            try:
-                from folium.plugins import MiniMap
-                minimap = MiniMap(toggle_display=True, minimized=False, width=150, height=150)
-                m.add_child(minimap)
-            except ImportError:
-                print("⚠️ MiniMap özelliği için folium sürümünü güncelleyin: pip install --upgrade folium")
-            
-            # MousePosition eklentisi ekle
-            try:
-                from folium.plugins import MousePosition
-                mouse_position = MousePosition(
-                    position='topright',
-                    separator=' | ',
-                    empty_string='Harita dışı',
-                    lng_first=False,
-                    num_digits=6,
-                    prefix='Koordinatlar:',
-                    lat_formatter="function(num) {return L.Util.formatNum(num, 6) + ' °N';}",
-                    lng_formatter="function(num) {return L.Util.formatNum(num, 6) + ' °E';}"
-                )
-                m.add_child(mouse_position)
-            except ImportError:
-                print("⚠️ MousePosition özelliği için folium sürümünü güncelleyin: pip install --upgrade folium")
-            
-            # MeasureControl eklentisi ekle
-            try:
-                from folium.plugins import MeasureControl
-                measure_control = MeasureControl(
-                    position='topleft',
-                    primary_length_unit='meters',
-                    secondary_length_unit='kilometers',
-                    primary_area_unit='sqmeters',
-                    secondary_area_unit='hectares',
-                    captured_options={
-                        'color': '#e74c3c',
-                        'weight': 3,
-                        'opacity': 0.8
-                    },
-                    measure_options={
-                        'color': '#3498db',
-                        'weight': 2,
-                        'opacity': 0.7
-                    }
-                )
-                m.add_child(measure_control)
-            except ImportError:
-                print("⚠️ MeasureControl özelliği için folium sürümünü güncelleyin: pip install --upgrade folium")
-            
             # GeoJSON PGA grid katmanı ekle (varsa)
             if geojson_data and geojson_data.get('features'):
                 try:
-                    print(f"🔄 GeoJSON katmanı ekleniyor: {len(geojson_data['features'])} poligon")
+                    print(f"🔄 GeoJSON katmanı ekleniyor: Başlangıçta {len(geojson_data['features'])} poligon")
                     
-                    # Import'ları yap
-                    from branca.colormap import linear, LinearColormap
-                    print("✅ branca colormap import edildi")
-                    
-                    print("✅ folium sınıfları import edildi")
-                    
-                    # PGA değer aralığını bul
-                    pga_values = [f['properties']['pga'] for f in geojson_data['features']]
-                    pga_min, pga_max = min(pga_values), max(pga_values)
-                    print(f"📊 PGA değer aralığı: {pga_min:.3f} - {pga_max:.3f}")
-                    
-                    # Renk skalası oluştur (AFAD TDTH tarzı)
+                    # -------------------------------------------------------------------------
+                    # KRİTİK NOKTA: DENİZLERE VE KOMŞULARA TAŞAN ALANLARI JİLET GİBİ KESİYORUZ
+                    # -------------------------------------------------------------------------
                     try:
-                        # YlOrRd renklerini kullan (sarı->turuncu->kırmızı)
-                        color_scale = LinearColormap(
-                            colors=['yellow', 'orange', 'red'], 
-                            vmin=pga_min, 
-                            vmax=pga_max
-                        )
-                        print("✅ Renk skalası oluşturuldu (yellow->orange->red)")
+                        from shapely.geometry import Point, shape, box
+                        import requests
+                        
+                        print("🌍 Türkiye'nin gerçek sınırları indiriliyor...")
+                        turkey_url = "https://raw.githubusercontent.com/johan/world.geo.json/master/countries/TUR.geo.json"
+                        res = requests.get(turkey_url, timeout=5)
+                        turkey_geom = shape(res.json()['features'][0]['geometry'])
+                        
+                        # Marmara Denizi'ni ve İstanbul'u kapsayacak şekilde poligonu doldur
+                        # box(min_lon, min_lat, max_lon, max_lat)
+                        marmara_box = box(26.0, 40.0, 30.0, 41.5) 
+                        turkey_geom = turkey_geom.union(marmara_box)
+                        
+                        # Kıyı şeritlerinde (İzmir, Antalya vs.) denize sıfır noktaların silinmemesi için
+                        # ~5.5 km'lik bir tampon (buffer) ekliyoruz.
+                        turkey_geom = turkey_geom.buffer(0.05)
+                        
+                        filtered_features = []
+                        for feat in geojson_data['features']:
+                            f_lat = feat['properties'].get('lat')
+                            f_lon = feat['properties'].get('lon')
+                            if f_lat is not None and f_lon is not None:
+                                # Nokta, güncellenmiş Türkiye poligonunun içindeyse ekle
+                                if turkey_geom.contains(Point(f_lon, f_lat)):
+                                    filtered_features.append(feat)
+                        
+                        geojson_data['features'] = filtered_features
+                        print(f"✂️ Sınır dışı alanlar JİLET GİBİ kesildi. Kalan poligon: {len(geojson_data['features'])}")
+                        
+                    except ImportError:
+                        print("⚠️ Hassas kesim için 'shapely' kütüphanesi eksik.")
                     except Exception as e:
-                        # Basit alternatif renk skalası
-                        color_scale = LinearColormap(['blue', 'green', 'yellow', 'red'], vmin=pga_min, vmax=pga_max)
-                        print(f"✅ Alternatif renk skalası oluşturuldu: {e}")
-                    
-                    # GeoJSON katmanı oluştur
-                    print("🔄 GeoJSON katmanı oluşturuluyor...")
-                    geojson_layer = folium.GeoJson(
-                        geojson_data,
-                        style_function=lambda feat: {
-                            'fillColor': color_scale(feat['properties']['pga']),
-                            'color': 'transparent',  # Çizgileri gizle
-                            'weight': 0,  # Çizgi kalınlığı 0
-                            'fillOpacity': 0.4,  # Daha şeffaf yap
-                            'opacity': 0  # Kenarlık şeffaflığı 0
-                        },
-                        highlight_function=lambda feat: {
-                            'fillOpacity': 0.7,  # Hover'da biraz daha opak
-                            'weight': 1,  # İnce çizgi
-                            'color': 'white',  # Beyaz kenarlık
-                            'opacity': 0.8
-                        },
-                        tooltip=folium.GeoJsonTooltip(
-                            fields=['pga', 'lat', 'lon'],
-                            aliases=['🌍 AFAD PGA (g):', '📍 Enlem:', '📍 Boylam:'],
-                            localize=True,
-                            sticky=True,
-                            labels=True,
-                            style="""
-                                background-color: #fff3e0;
-                                border: 2px solid #ff9800;
-                                border-radius: 5px;
-                                box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-                                font-family: Arial, sans-serif;
-                                font-size: 12px;
-                                padding: 8px;
-                            """
-                        ),
-                        popup=folium.GeoJsonPopup(
-                            fields=['pga', 'lat', 'lon', 'dd_level'],
-                            aliases=['📊 AFAD PGA Değeri (g):', '📍 Koordinat - Enlem:', '📍 Koordinat - Boylam:', '🏗️ Deprem Düzeyi:'],
-                            localize=True,
-                            style="background-color: #fff3e0; border-radius: 5px; font-family: Arial, sans-serif;"
-                        ),
-                        popup_keep_highlighted=True
-                    )
-                    print("✅ GeoJSON katmanı oluşturuldu")
-                    
-                    # LayerControl için feature group
-                    print("🔄 FeatureGroup oluşturuluyor...")
-                    feature_group = folium.FeatureGroup(name=f"PGA Dağılımı ({earthquake_level})")
-                    geojson_layer.add_to(feature_group)
-                    feature_group.add_to(m)
-                    print("✅ FeatureGroup eklendi")
-                    
-                    # Renk skalası legend'ini ekle
-                    color_scale.caption = f'PGA Değerleri (g) - {earthquake_level}'
-                    color_scale.add_to(m)
-                    print("✅ Renk skalası legend eklendi")
-                    
-                    # LayerControl ekle
-                    folium.LayerControl(position='topright', collapsed=False).add_to(m)
-                    print("✅ LayerControl eklendi")
-                    
-                    print(f"📐 GeoJSON PGA katmanı eklendi: {len(geojson_data['features'])} poligon")
-                    
-                except ImportError as ie:
-                    print(f"⚠️ GeoJSON import hatası: {ie}")
-                    print("💡 Çözüm: pip install --upgrade folium branca")
+                        print(f"⚠️ Sınır kesme işlemi başarısız oldu, normal şekilde devam ediliyor: {e}")
+                    # -------------------------------------------------------------------------
+
+                    # Eğer filtrelemeden sonra elde poligon kaldıysa ekle
+                    if geojson_data['features']:
+                        from branca.colormap import LinearColormap
+                        
+                        # PGA değer aralığını bul
+                        pga_values = [f['properties']['pga'] for f in geojson_data['features']]
+                        pga_min, pga_max = min(pga_values), max(pga_values)
+                        
+                        # Renk skalası oluştur (AFAD TDTH tarzı)
+                        try:
+                            color_scale = LinearColormap(colors=['yellow', 'orange', 'red'], vmin=pga_min, vmax=pga_max)
+                        except Exception:
+                            color_scale = LinearColormap(['blue', 'green', 'yellow', 'red'], vmin=pga_min, vmax=pga_max)
+                        
+                        # GeoJSON katmanı oluştur
+                        geojson_layer = folium.GeoJson(
+                            geojson_data,
+                            style_function=lambda feat: {
+                                'fillColor': color_scale(feat['properties']['pga']),
+                                'color': 'transparent', 
+                                'weight': 0, 
+                                'fillOpacity': 0.4, 
+                                'opacity': 0 
+                            },
+                            highlight_function=lambda feat: {
+                                'fillOpacity': 0.7, 
+                                'weight': 1, 
+                                'color': 'white', 
+                                'opacity': 0.8
+                            },
+                            tooltip=folium.GeoJsonTooltip(
+                                fields=['pga', 'lat', 'lon'],
+                                aliases=['🌍 AFAD PGA (g):', '📍 Enlem:', '📍 Boylam:'],
+                                localize=True, sticky=True, labels=True,
+                                style="background-color: #fff3e0; border: 2px solid #ff9800; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); font-family: Arial, sans-serif; font-size: 12px; padding: 8px;"
+                            ),
+                            popup=folium.GeoJsonPopup(
+                                fields=['pga', 'lat', 'lon', 'dd_level'],
+                                aliases=['📊 AFAD PGA Değeri (g):', '📍 Koordinat - Enlem:', '📍 Koordinat - Boylam:', '🏗️ Deprem Düzeyi:'],
+                                localize=True,
+                                style="background-color: #fff3e0; border-radius: 5px; font-family: Arial, sans-serif;"
+                            ),
+                            popup_keep_highlighted=True
+                        )
+                        
+                        # LayerControl için feature group
+                        feature_group = folium.FeatureGroup(name=f"PGA Dağılımı ({earthquake_level})")
+                        geojson_layer.add_to(feature_group)
+                        feature_group.add_to(m)
+                        
+                        # Renk skalası legend'ini ekle
+                        color_scale.caption = f'PGA Değerleri (g) - {earthquake_level}'
+                        color_scale.add_to(m)
+                        
+                        # LayerControl ekle
+                        folium.LayerControl(position='topright', collapsed=False).add_to(m)
                 except Exception as e:
                     print(f"❌ GeoJSON katmanı ekleme hatası: {e}")
-                    import traceback
-                    traceback.print_exc()
-                    print("💡 Hata detayları yukarıda gösterildi")
             
             # Popup metni oluştur - daha büyük ve stil sahibi
             popup_html = f"""
@@ -325,43 +264,18 @@ class MapUtils:
                         <td style="padding: 5px; color: #2c3e50;">{lon:.6f}°</td>
                     </tr>"""
             
-            # Diğer parametreler - tümü aynı stil ile
             if sds_value is not None:
-                popup_html += f"""
-                    <tr>
-                        <td style="padding: 5px; font-weight: bold; color: #34495e;">⚡ SDS (Tasarım):</td>
-                        <td style="padding: 5px; color: #8e44ad; font-weight: bold;">{sds_value:.4f} g</td>
-                    </tr>"""
+                popup_html += f"<tr><td style='padding: 5px; font-weight: bold; color: #34495e;'>⚡ SDS (Tasarım):</td><td style='padding: 5px; color: #8e44ad; font-weight: bold;'>{sds_value:.4f} g</td></tr>"
             if afad_pga_value is not None:
-                popup_html += f"""
-                    <tr>
-                        <td style="padding: 5px; font-weight: bold; color: #34495e;">🌍 PGA (AFAD):</td>
-                        <td style="padding: 5px; color: #ff6b35; font-weight: bold;">{afad_pga_value:.4f} g</td>
-                    </tr>"""
+                popup_html += f"<tr><td style='padding: 5px; font-weight: bold; color: #34495e;'>🌍 PGA (AFAD):</td><td style='padding: 5px; color: #ff6b35; font-weight: bold;'>{afad_pga_value:.4f} g</td></tr>"
             if earthquake_level:
-                popup_html += f"""
-                    <tr>
-                        <td style="padding: 5px; font-weight: bold; color: #34495e;">🏗️ Deprem Düzeyi:</td>
-                        <td style="padding: 5px; color: #e74c3c; font-weight: bold;">{earthquake_level}</td>
-                    </tr>"""
+                popup_html += f"<tr><td style='padding: 5px; font-weight: bold; color: #34495e;'>🏗️ Deprem Düzeyi:</td><td style='padding: 5px; color: #e74c3c; font-weight: bold;'>{earthquake_level}</td></tr>"
             if soil_class:
-                popup_html += f"""
-                    <tr>
-                        <td style="padding: 5px; font-weight: bold; color: #34495e;">🌱 Zemin Sınıfı:</td>
-                        <td style="padding: 5px; color: #27ae60; font-weight: bold;">{soil_class}</td>
-                    </tr>"""
+                popup_html += f"<tr><td style='padding: 5px; font-weight: bold; color: #34495e;'>🌱 Zemin Sınıfı:</td><td style='padding: 5px; color: #27ae60; font-weight: bold;'>{soil_class}</td></tr>"
             
-            popup_html += """
-                </table>
-            </div>
-            """
+            popup_html += "</table></div>"
             
-            # Büyük popup ile marker ekle
-            popup = folium.Popup(
-                popup_html,
-                max_width=300,
-                min_width=280
-            )
+            popup = folium.Popup(popup_html, max_width=300, min_width=280)
             
             folium.Marker(
                 [lat, lon], 
@@ -373,17 +287,14 @@ class MapUtils:
             # Geçici HTML dosyası oluştur
             with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as temp_file:
                 m.save(temp_file.name)
-                
-                # Tarayıcıda aç
                 webbrowser.open(f'file://{os.path.abspath(temp_file.name)}')
                 
             return True
             
         except Exception as e:
-            print(f"Harita oluşturma hatası: {e}")
             messagebox.showerror("Harita Hatası", f"Harita oluşturulurken hata oluştu:\n{e}")
             return False
-    
+        
     @staticmethod
     def create_multi_point_map(points, zoom_start=10):
         """

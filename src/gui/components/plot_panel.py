@@ -418,6 +418,36 @@ class PlotPanel:
         # # Crosshair çizgilerini hazırla
         # self._create_crosshair_lines()
         
+        # ── Referans periyot çizgilerini çiz ──
+        if self._user_ref_lines:
+            for gtype in selected_types:
+                ax = self.axes_map[gtype]
+                for t_val in self._user_ref_lines:
+                    try:
+                        ln = ax.axvline(
+                            x=t_val,
+                            color="#9CA3AF",
+                            linestyle="--",
+                            linewidth=0.8,
+                            alpha=0.7,
+                            zorder=1,
+                        )
+                        self._ref_lines.append(ln)
+                        # Etiket (sadece en üstteki grafiğe)
+                        if gtype == selected_types[0]:
+                            txt = ax.annotate(
+                                f"T={t_val}",
+                                xy=(t_val, 0.98),
+                                xycoords=("data", "axes fraction"),
+                                ha="center",
+                                va="bottom",
+                                fontsize=7,
+                                color="#6B7280",
+                            )
+                            self._ref_lines.append(txt)
+                    except Exception:
+                        continue
+        
         self._create_hover_annotations()
         self._create_crosshair_lines()
 
@@ -596,8 +626,10 @@ class PlotPanel:
             summary_text = f"$S_{{DS}} = {sds_val:.2f}$ {unit_symbol}"
             
             y_offset = (ax.get_ylim()[1] - ax.get_ylim()[0]) * 0.04
-            ax.text((pA + pB) / 2, sds_val - (y_offset * 0.3), summary_text, 
-                    ha='center', va='top', fontsize=8, fontweight='bold', 
+            
+
+            ax.text((pA + pB) / 2, sds_val + (y_offset * 0.5), summary_text, 
+                    ha='center', va='bottom', fontsize=8, fontweight='bold', 
                     bbox=dict(boxstyle='round,pad=0.3', fc='white', ec=MODERN_PALETTE['border'], alpha=0.9))
 
         try:

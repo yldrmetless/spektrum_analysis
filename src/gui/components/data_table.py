@@ -5,6 +5,7 @@ Veri tablosu bileşeni
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from ...utils.file_utils import FileUtils
+import customtkinter as ctk
 
 class DataTable:
     """Veri tablosu bileşeni sınıfı"""
@@ -72,6 +73,11 @@ class DataTable:
             style.map("DataTable.Treeview",
                     background=[('selected', self._SELECTED_BG)],
                     foreground=[('selected', self._SELECTED_FG)])
+            
+            # Dış border'ı kaldır
+            style.layout("DataTable.Treeview", [
+                ('Treeview.treearea', {'sticky': 'nswe'})
+            ])
 
             # Modern dikey scrollbar stili
             style.configure("Modern.Vertical.TScrollbar",
@@ -308,13 +314,22 @@ class DataTable:
         table_container = ttk.Frame(self.parent_frame)
         table_container.pack(fill="both", expand=True)
 
-        # Birim bilgisi etiketi
         unit_info_text = self._get_unit_info_from_dataframe(dataframe)
         if unit_info_text:
-            unit_info_label = ttk.Label(table_container,
-                                       text=f"\U0001F4CA {unit_info_text}",
-                                       font=('Poppins', 9),
-                                       foreground='#6B7280')
+            import tkinter as tk
+            
+            try:
+                parent_bg_color = table_container.cget("bg")
+            except Exception:
+                parent_bg_color = "#F0F0F0" 
+
+            unit_info_label = tk.Label(
+                table_container,
+                text=f"\U0001F4CA {unit_info_text}",
+                font=('Poppins', 9),
+                fg="#565656",
+                bg=parent_bg_color
+            )
             unit_info_label.pack(anchor='w', pady=(0, 4), padx=4)
 
         # Tüm sütunları hazırla (index + columns)
@@ -385,9 +400,13 @@ class DataTable:
 
         # Scrollbar'lar ekle
         # Sadece modern dikey scrollbar (yatay scrollbar kaldırıldı)
-        v_scrollbar = ttk.Scrollbar(tree_frame, orient="vertical",
-                                     command=self.tree.yview,
-                                     style="Modern.Vertical.TScrollbar")
+        v_scrollbar = ctk.CTkScrollbar(tree_frame, orientation="vertical",
+                                        command=self.tree.yview,
+                                        width=16,
+                                        button_color="#C0C0C0",
+                                        button_hover_color="#A0A0A0",
+                                        fg_color="transparent",
+                                        corner_radius=4)
         self.tree.configure(yscrollcommand=v_scrollbar.set)
 
         # Layout
