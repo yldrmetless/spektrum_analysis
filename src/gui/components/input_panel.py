@@ -1437,9 +1437,19 @@ class InputPanel:
         self.ref_periods_entry.pack(fill="x", padx=12, pady=10)
 
         # Tooltip + validasyon (mevcut fonksiyonların aynen)
+        tooltip_content = (
+            "Grafiğe dikey referans çizgileri eklemek için değerleri virgülle ayırın.\n\n"
+            "TEKNİK KARŞILIKLAR:\n"
+            "• Tᴀ ve Tʙ (Köşe Periyotları): Spektrumun en yüksek ivme (plato)\n"
+            "  bölgesinin başlangıç ve bitiş sınırları.\n"
+            "• 1.0 s: Orta-uzun periyotlu yapılar için standart kontrol noktası.\n"
+            "• Tʟ (Uzun Periyot Geçiş Eşiği): Spektrumun 6.0 saniyeden sonraki\n"
+            "  davranış değişim sınırı.\n\n"
+            "Örnek: 0.35, 1.0, 6.0"
+        )
         self._attach_tooltip(
             self.ref_periods_entry,
-            "Grafiğe referans çizgileri eklemek için virgülle ayrılmış T değerleri girin.\nÖrnek: 0.35, 1.0, 6.0"
+            tooltip_content
         )
         try:
             vcmd = (self.parent_frame.register(self._validate_ref_periods), '%P')

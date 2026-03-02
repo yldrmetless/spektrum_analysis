@@ -285,9 +285,44 @@ class MapUtils:
             ).add_to(m)
             
             # Geçici HTML dosyası oluştur
+# Geçici HTML dosyası oluştur
             with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as temp_file:
-                m.save(temp_file.name)
-                webbrowser.open(f'file://{os.path.abspath(temp_file.name)}')
+                temp_path = temp_file.name
+            
+            m.save(temp_path)
+            
+            # Türkiye sınır kilidi - Folium'da <body> olmadığı için </html> öncesine ekliyoruz
+            bounds = MapUtils.get_turkey_bounds()
+            lock_script = f"""
+<script>
+(function() {{
+    function lockMap() {{
+        var map = null;
+        for (var key in window) {{
+            try {{ if (window[key] instanceof L.Map) {{ map = window[key]; break; }} }} catch(e) {{}}
+        }}
+        if (!map) {{ setTimeout(lockMap, 300); return; }}
+        var sw = L.latLng({bounds["min_lat"]}, {bounds["min_lon"]});
+        var ne = L.latLng({bounds["max_lat"]}, {bounds["max_lon"]});
+        var tb = L.latLngBounds(sw, ne);
+        map.setMaxBounds(tb.pad(0.02));
+        map.options.maxBoundsViscosity = 1.0;
+        map.setMinZoom(6);
+        map.on('drag', function() {{
+            map.panInsideBounds(tb.pad(0.02), {{animate: false}});
+        }});
+    }}
+    lockMap();
+}})();
+</script>
+"""
+            with open(temp_path, 'r', encoding='utf-8') as f:
+                html_content = f.read()
+            html_content = html_content.replace('</html>', lock_script + '\n</html>')
+            with open(temp_path, 'w', encoding='utf-8') as f:
+                f.write(html_content)
+            
+            webbrowser.open(f'file://{os.path.abspath(temp_path)}')
                 
             return True
             
@@ -521,7 +556,7 @@ class MapUtils:
         return {
             "min_lat": 35.85,   # En güney nokta (daha sıkı)
             "max_lat": 42.05,   # En kuzey nokta (daha sıkı)  
-            "min_lon": 26.0,    # En batı nokta (daha sıkı)
+            "min_lon": 26.3,    # En batı nokta (daha sıkı)
             "max_lon": 44.7     # En doğu nokta (daha sıkı)
         }
     
